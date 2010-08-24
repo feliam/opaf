@@ -162,7 +162,7 @@ def canonizeNames(xml_pdf, traslate=None):
                      }
     keywords = xml_pdf.xpath('//dictionary_entry/name[position()=1]')
     print "Canonize!",[str(payload(x)) for x in keywords]
-
+    
 def getUnresolvedRefs(xml_pdf):
     '''
         List Unresolved References
@@ -223,8 +223,9 @@ def doEverything(xml_pdf):
         This script will try to expand, parse an fix references for every iobject 
     '''
     #Canonize names
-    logger.info("Canonizing key names")
-    canonizeNames(xml_pdf)
+#TODO:
+#    logger.info("Canonizing key names")
+#    canonizeNames(xml_pdf)
 
     #List of indirect objects.
     logger.info("Updating list of reacheable indirect objects")

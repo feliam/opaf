@@ -63,13 +63,12 @@ if __name__ == '__main__':
     parser.add_option("-g", "--graph", dest="graph", default='graph.png',
                       help="Generate and dump graph to GRAPH.", metavar="GRAPH")
 
-    parser.add_option("-d", "--decompress", dest="decompress",
+    parser.add_option("-d", "--decompress", action="store_true", dest="decompress",
                       help="Apply a filter pack to decompress and parse objec streams.")
 
 
 
     (options, args) = parser.parse_args()
-    print (options, args)
     logging.basicConfig(filename=options.log_file,level=logging.DEBUG)
     logger = logging.getLogger("OPAF")
     logger.debug("Starting OPAF")
@@ -80,6 +79,9 @@ if __name__ == '__main__':
             filename=args[0]
             logger.info("Loading %s ..."%filename) 
             pdf = file(filename,"r").read()            
+        else:
+            assert options.interact == False, "Interactive not compatible with stdin feed"
+            pdf = file("/dev/sdtin","r").read()            
 
         #Interact if asked
         if options.shell:
