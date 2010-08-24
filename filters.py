@@ -1,7 +1,7 @@
 import zlib,struct
 from StringIO import StringIO
 import logging
-logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
+#logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("FILTER")
 
 #This was robbed/ ported from gohstcrip C code/ coded insanely fast.

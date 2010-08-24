@@ -1,7 +1,7 @@
 
 #Logging facility
 import logging
-logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
+#logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("OPAFLib")
 
 
@@ -272,7 +272,7 @@ def doEverything(xml_pdf):
 ####
 #### GRAPH
 ####
-def graph(xml_pdf):
+def graph(xml_pdf,png=None):
     import matplotlib.pyplot
     import networkx as nx
     import matplotlib.pyplot as plt
@@ -300,7 +300,10 @@ def graph(xml_pdf):
     plt.figure(figsize=(8,8))
     nx.draw(G,pos,node_size=20,alpha=0.5,node_color="blue", with_labels=False)
     plt.axis('equal')
-    plt.show()
+    if png :
+        plt.savefig(png)
+    else:
+        plt.show()
 
 def getXML(xml_pdf):
     ''' 

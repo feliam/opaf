@@ -11,7 +11,7 @@ from xmlast import create_node, payload, setpayload, expand_span, etree
 
 #logging facility
 import logging
-logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
+#logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("PARSER")
 
 
@@ -210,7 +210,7 @@ parsers = {}
 for tag in ['pdf','object', 'indirect', 'pdf_brute_end']:
     logger.info("Building parsing table for tag %s"%tag)
     start = tag
-    parsers[tag] = yacc.yacc( start=tag)
+    parsers[tag] = yacc.yacc(start=tag, errorlog=yacc.NullLogger())
 
 def parse(tag,stream):
     logger.debug("Parsing a %s"%tag)

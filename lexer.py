@@ -9,7 +9,7 @@ TOKEN = lex.TOKEN
 
 #logging facility
 import logging
-logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
+#logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("LEXER")
 
 # Tokens
@@ -361,14 +361,14 @@ def t_error(t):
     c = t.lexer.lexdata[t.lexer.lexpos]
     logger.error("Error at pos %d. Skipping byte %02x[%s]"%(t.lexer.lexpos, ord(c), c.isalpha() and c or '?'))
     raise LexerException(t,"Scanning limbo")
-    t.lexer.skip(1)
+#    t.lexer.skip(1)
 
 #ignore white spaces
 t_ignore = white_spaces
 
 # Build the lexer
-#lex.lex(optimize=True)
-lex.lex(debug=True)
+lex.lex(debug=False,errorlog=lex.NullLogger())
+
 if __name__ == '__main__':
     try:
         import psyco
