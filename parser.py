@@ -212,6 +212,7 @@ for tag in ['pdf','object', 'indirect', 'pdf_brute_end']:
     start = tag
     parsers[tag] = yacc.yacc(start=tag, errorlog=yacc.NullLogger())
 
+#entry function to parse a whole pdf or portion of it..
 def parse(tag,stream):
     logger.debug("Parsing a %s"%tag)
     return parsers[tag].parse(stream,tracking=True)
@@ -224,7 +225,13 @@ def normalParser(pdf):
         Assuming endstreams are no appearing inside streams 
         we can apply an eager parser and do not Need the xref
     '''
-    return etree.ElementTree(parse('pdf',pdf))
+    try:
+        return etree.ElementTree(parse('pdf',pdf))
+    except Exception,e:
+        logger.error("Parsing a %s"%tag)
+    return None
+        
+        
 
 def bruteParser(pdf):
     '''
@@ -233,107 +240,111 @@ def bruteParser(pdf):
         It may produce phantom overlaped XML objects. Yo may check this issues afterwards.
         Also it is slow.
     '''
-    #Search for the PDF header
-    headers = list(re.finditer(r'%PDF-1\.[0-7]',pdf))
-    xml_headers = []
-    for header in headers:
-        start = header.start()
-        end = header.end()
-        version = header.group(0)[-3:]
-        xml_headers.append(create_node('header', (start,end), version))
-    logger.info('Found %d headers'%len(xml_headers))
-    
-    #Search the startxref. And xrefs.
-    startxrefs = list(re.finditer(r'startxref[\x20\r\n\t\x0c\x00]+[0-9]+[\x20\r\n\t\x0c\x00]+%%EOF',pdf))
-    xrefs = list(re.finditer(r'xref',pdf))    
-    xml_xrefs = []
-    xml_pdf_ends = []
-    for xref in xrefs:
-        start = xref.start()
-        for end in [x.end() for x in startxrefs if x.start()>xref.end()]:
-            logger.info("Searching for a xref, trailer and %%%%EOF at [%s:%s]"%(start,end))
-            potential_xref = pdf[start:end]
-            try:
-                xml_xref, xml_pdf_end = parse('pdf_brute_end', potential_xref)
-                #fix lexspan and append
-                xml_xref.set('lexstart', str(int(xml_xref.get('lexstart'))+start))
-                xml_xref.set('lexend', str(int(xml_xref.get('lexend'))+start))
-                xml_xrefs.append(xml_xref)
+    try:
+        #Search for the PDF header
+        headers = list(re.finditer(r'%PDF-1\.[0-7]',pdf))
+        xml_headers = []
+        for header in headers:
+            start = header.start()
+            end = header.end()
+            version = header.group(0)[-3:]
+            xml_headers.append(create_node('header', (start,end), version))
+        logger.info('Found %d headers'%len(xml_headers))
+        
+        #Search the startxref. And xrefs.
+        startxrefs = list(re.finditer(r'startxref[\x20\r\n\t\x0c\x00]+[0-9]+[\x20\r\n\t\x0c\x00]+%%EOF',pdf))
+        xrefs = list(re.finditer(r'xref',pdf))    
+        xml_xrefs = []
+        xml_pdf_ends = []
+        for xref in xrefs:
+            start = xref.start()
+            for end in [x.end() for x in startxrefs if x.start()>xref.end()]:
+                logger.info("Searching for a xref, trailer and %%%%EOF at [%s:%s]"%(start,end))
+                potential_xref = pdf[start:end]
+                try:
+                    xml_xref, xml_pdf_end = parse('pdf_brute_end', potential_xref)
+                    #fix lexspan and append
+                    xml_xref.set('lexstart', str(int(xml_xref.get('lexstart'))+start))
+                    xml_xref.set('lexend', str(int(xml_xref.get('lexend'))+start))
+                    xml_xrefs.append(xml_xref)
 
-                #fix lexspan and append
-                xml_pdf_end.set('lexstart', str(int(xml_pdf_end.get('lexstart'))+start))
-                xml_pdf_end.set('lexend', str(int(xml_pdf_end.get('lexend'))+start))
-                xml_pdf_ends.append(xml_pdf_end)
-            except Exception:
-                logger.info("Couldn't parse a xref, trailer and %%%%EOF at [%s:%s]"%(start,end))
+                    #fix lexspan and append
+                    xml_pdf_end.set('lexstart', str(int(xml_pdf_end.get('lexstart'))+start))
+                    xml_pdf_end.set('lexend', str(int(xml_pdf_end.get('lexend'))+start))
+                    xml_pdf_ends.append(xml_pdf_end)
+                except Exception:
+                    logger.info("Couldn't parse a xref, trailer and %%%%EOF at [%s:%s]"%(start,end))
 
-    #use the force
-    #This algorithm will try to match any obj with any endobj and will keep it 
-    #if a sane object is found inside. Overlapping is possible here, you may analize it
-    #cut it off from the xml later, using the lexspan markers.
-    delimiter = r"[()<>\[\]/%\x20\r\n\t\x0c\x00]"
-    objs = list(re.finditer(r'\d+\x20\d+\x20obj'+delimiter, pdf))
-    endobjs = list(re.finditer(delimiter+r'endobj', pdf))
-    streams = list(re.finditer(delimiter+'stream'+delimiter, pdf))
-    endstreams = list(re.finditer('endstream'+delimiter+'endobj', pdf))
-    xml_iobjects = []
-    for m in objs:
-        start = m.start()
-        for end in [x.end() for x in endobjs if x.start()>m.end()]:
-            try:
-                logger.info("Parsing potential object at [%s:%s]"%(start,end))
-                potential_obj = pdf[start:end]
-                escape_endstreams = [e.start()+start for e in endstreams if e.start()>start and e.end()<end ]
+        #use the force
+        #This algorithm will try to match any obj with any endobj and will keep it 
+        #if a sane object is found inside. Overlapping is possible here, you may analize it
+        #cut it off from the xml later, using the lexspan markers.
+        delimiter = r"[()<>\[\]/%\x20\r\n\t\x0c\x00]"
+        objs = list(re.finditer(r'\d+\x20\d+\x20obj'+delimiter, pdf))
+        endobjs = list(re.finditer(delimiter+r'endobj', pdf))
+        streams = list(re.finditer(delimiter+'stream'+delimiter, pdf))
+        endstreams = list(re.finditer('endstream'+delimiter+'endobj', pdf))
+        xml_iobjects = []
+        for m in objs:
+            start = m.start()
+            for end in [x.end() for x in endobjs if x.start()>m.end()]:
+                try:
+                    logger.info("Parsing potential object at [%s:%s]"%(start,end))
+                    potential_obj = pdf[start:end]
+                    escape_endstreams = [e.start()+start for e in endstreams if e.start()>start and e.end()<end ]
 
-                for e in escape_endstreams[:-1]:
-                    potential_obj = potential_obj[:e] +"X"*9 + potential_obj[e+9:]
+                    for e in escape_endstreams[:-1]:
+                        potential_obj = potential_obj[:e] +"X"*9 + potential_obj[e+9:]
 
-                xml_iobject = parse('indirect',potential_obj)
+                    xml_iobject = parse('indirect',potential_obj)
 
-                #fix lexspan
-                xml_iobject.set('lexstart', str(int(xml_iobject.get('lexstart'))+start))
-                xml_iobject.set('lexend', str(int(xml_iobject.get('lexend'))+start))
-                #fix escape
-                #WRONG offset!!!!!!!!!!!!
-                pl = payload(xml_iobject)
-                for e in escape_endstreams[:-1]:
-                    pl = pl[:e] +"endstream" + pl[e+9:]
-                setpayload(xml_iobject, pl)
-                #append to the list
-                xml_iobjects.append(xml_iobject)
-            except:
-                logger.info("Could not parse potential object at [%s:%s]."%(start,end))
+                    #fix lexspan
+                    xml_iobject.set('lexstart', str(int(xml_iobject.get('lexstart'))+start))
+                    xml_iobject.set('lexend', str(int(xml_iobject.get('lexend'))+start))
+                    #fix escape
+                    #WRONG offset!!!!!!!!!!!!
+                    pl = payload(xml_iobject)
+                    for e in escape_endstreams[:-1]:
+                        pl = pl[:e] +"endstream" + pl[e+9:]
+                    setpayload(xml_iobject, pl)
+                    #append to the list
+                    xml_iobjects.append(xml_iobject)
+                except:
+                    logger.info("Could not parse potential object at [%s:%s]."%(start,end))
 
-    #summ all the objects
-    allobjects = xml_headers + xml_xrefs + xml_pdf_ends + xml_iobjects
+        #summ all the objects
+        allobjects = xml_headers + xml_xrefs + xml_pdf_ends + xml_iobjects
 
-    if len(xml_headers) == 0:
-        logger.info("%%%%EOF tag was not found! Creating a dummy.")
-        allobjects.append(create_node('pdf_end', (len(pdf),len(pdf)), "-1"))
+        if len(xml_headers) == 0:
+            logger.info("%%%%EOF tag was not found! Creating a dummy.")
+            allobjects.append(create_node('pdf_end', (len(pdf),len(pdf)), "-1"))
 
-    if len(xml_headers) == 0:
-        logger.info("%%%%PDF-N-M tag was not found! Creating a dummy.")
-        allobjects.append(create_node('header', (0,len(pdf)), "NOVERSION",[] ))
+        if len(xml_headers) == 0:
+            logger.info("%%%%PDF-N-M tag was not found! Creating a dummy.")
+            allobjects.append(create_node('header', (0,len(pdf)), "NOVERSION",[] ))
 
-    #Sort it as they appear in the file
-    allobjects = sorted(allobjects,lambda x,y: cmp(int(x.get('lexstart')), int(y.get('lexstart'))))
+        #Sort it as they appear in the file
+        allobjects = sorted(allobjects,lambda x,y: cmp(int(x.get('lexstart')), int(y.get('lexstart'))))
 
-    #recreate XML structure 'best' we can...
-    assert allobjects[0].tag == 'header'
-    root_element = create_node('pdf', (0,len(pdf)), "OPAF!(raw)",[allobjects.pop(0)])
-    
-    update = create_node('pdf_update',(0,0))
-    while len(allobjects)>0:
-        thing = allobjects.pop(0)
-        update.append(thing)
-        if thing.tag == 'pdf_end':
-            xml_pdf.append(update)
-            update = create_node('pdf_update',(0,0))
-    if len(update)>0:
-        logger.info("Missing ending %%EOF")
-        root_element.append(update)
+        #recreate XML structure 'best' we can...
+        assert allobjects[0].tag == 'header'
+        root_element = create_node('pdf', (0,len(pdf)), "OPAF!(raw)",[allobjects.pop(0)])
+        
+        update = create_node('pdf_update',(0,0))
+        while len(allobjects)>0:
+            thing = allobjects.pop(0)
+            update.append(thing)
+            if thing.tag == 'pdf_end':
+                root_element.append(update)
+                update = create_node('pdf_update',(0,0))
+        if len(update)>0:
+            logger.info("Missing ending %%EOF")
+            root_element.append(update)
 
-    return etree.ElementTree(root_element)
+        return etree.ElementTree(root_element)
+    except Exception,e:
+        logger.error("Brute-Parsing a %s"%tag)    
+    return None
 
 def xrefParser(pdf):
     '''

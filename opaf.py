@@ -101,20 +101,36 @@ if __name__ == '__main__':
                 xml_pdf = xrefParser(pdf)
             if xml_pdf == None:
                 logger.info("Couldn't parse it. Damn!")
-                    
+
         if options.decompress and xml_pdf:
             #A prepared script that flatten and fix the xml pdf.
             doEverything(xml_pdf)
-            logger.info("We reach %d indirect objects!"%len(xml_pdf.xpath('//*[ starts-with(local-name(),"indirect_object")] ')))
 
         if options.xml_filename and xml_pdf:
             logger.info("Writing XML in %s"%options.xml_filename)            
-            file('output.xml','w').write(getXML(xml_pdf))
+            file(options.xml_filename,'w').write(getXML(xml_pdf))
+        elif xml_pdf:
+            print getXML(xml_pdf),
 
         if options.graph and xml_pdf:
             logger.info("Generating GRAPH")
             graph(xml_pdf,options.graph)
 
+        if xml_pdf:
+            #Get statistics...
+            logger.info("There are %d indirect objects!"%len(xml_pdf.xpath('//*[ starts-with(local-name(),"indirect_object")] ')))
+            
+            types = {}
+            for ty in [payload(x) for x in xml_pdf.xpath('//*[starts-with(local-name(),"indirect_object")]/dictionary/dictionary_entry/name[@payload=enc("Type")]/../*[position()=2]')]:
+                types[ty] = types.get(ty,0)+1
+            logger.info("Objet /Type frequencies: %s"%repr(types))
+
+            filters = {}
+            for ty in [payload(x) for x in xml_pdf.xpath('//indirect_object_stream/dictionary/dictionary_entry/name[@payload=enc("Filter")]/../*[position()=2]')]:
+                filters[ty] = filters.get(ty,0)+1
+            logger.info("Objet /Filter frequencies: %s"%repr(filters))
+
+         
     except Exception,e:
         print "OH!\n", e
         exc_type, exc_value, exc_traceback = sys.exc_info()

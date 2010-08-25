@@ -120,12 +120,12 @@ def getRoot(xml_pdf, xref=None, startxref=None):
     if xref == None:
         xref = getMainXref(xml_pdf, startxref)
     #Get the root reference
-    root_ref = xref.xpath('.//dictionary/dictionary_entry/name[position()=1 and fromb64(@payload)="Root"]/../R')
+    root_ref = xref.xpath('.//dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Root"]/../R')
     assert len(root_ref) == 1, 'Trailer should point to one Root'
     root_ref = payload(root_ref[0])
 
     #Get the Root
-    root = xml_pdf.xpath('//indirect_object[fromb64(@payload)="%s"]'%root_ref)            
+    root = xml_pdf.xpath('//indirect_object[dec(@payload)="%s"]'%root_ref)            
     assert len(root) == 1, 'Should be only one Indirect %s object.'%root_ref
     return root[0]
 
@@ -214,7 +214,7 @@ def getTypeOfStream(xml_pdf):
     '''
         Returns ty Type of the stream in xml_pdf.
     '''
-    ty = xml_pdf.xpath('//indirect_object_stream/dictionary/dictionary_entry/name[@payload=enc("Type")]/../*[position()=2]')
+    ty = xml_pdf.xpath('.//indirect_object_stream/dictionary/dictionary_entry/name[@payload=enc("Type")]/../*[position()=2]')
     return len(ty)==0 and None or ty[0]
 
 

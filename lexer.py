@@ -24,7 +24,7 @@ states = ( ('string', 'exclusive'),
            ('xref', 'exclusive'),
          )
 #Unique Lexer exception to comunicate error conditions to upper dimensions..
-class LexerException(BaseException):
+class LexerException(Exception):
     def __init__(self,t,txt):
         self.pos=t.lexer.lexpos
         self.data=t.lexer.lexdata[t.lexer.lexpos:10]
