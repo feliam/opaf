@@ -285,11 +285,13 @@ def bruteParser(pdf):
         streams = list(re.finditer(delimiter+'stream'+delimiter, pdf))
         endstreams = list(re.finditer('endstream'+delimiter+'endobj', pdf))
         xml_iobjects = []
+        logger.info("Found %d Object starting points"%len(objs))
+        logger.info("Found %d Object ending points"%len(endobjs))
         for m in objs:
             start = m.start()
             for end in [x.end() for x in endobjs if x.start()>m.end()]:
                 try:
-                    logger.info("Parsing potential object at [%s:%s]"%(start,end))
+                    logger.debug("Parsing potential object at [%s:%s]"%(start,end))
                     potential_obj = pdf[start:end]
                     escape_endstreams = [e.start()+start for e in endstreams if e.start()>start and e.end()<end ]
 
@@ -297,7 +299,8 @@ def bruteParser(pdf):
                         potential_obj = potential_obj[:e] +"X"*9 + potential_obj[e+9:]
 
                     xml_iobject = parse('indirect',potential_obj)
-
+                    if xml_iobject == None:
+                        continue
                     #fix lexspan
                     xml_iobject.set('lexstart', str(int(xml_iobject.get('lexstart'))+start))
                     xml_iobject.set('lexend', str(int(xml_iobject.get('lexend'))+start))
@@ -309,8 +312,12 @@ def bruteParser(pdf):
                     setpayload(xml_iobject, pl)
                     #append to the list
                     xml_iobjects.append(xml_iobject)
-                except:
-                    logger.info("Could not parse potential object at [%s:%s]."%(start,end))
+                    #Just parse the first object we can of this try.
+                    break
+                except Exception,e:
+                    logger.error("Received exception %s"%e)
+                    logger.debug("Could not parse potential object at [%s:%s]."%(start,end))
+        logger.info("Succesfully parsed %d/%d Objects ending points"%(len(xml_iobjects),len(endobjs)*len(objs)))
 
         #summ all the objects
         allobjects = xml_headers + xml_xrefs + xml_pdf_ends + xml_iobjects
@@ -379,7 +386,7 @@ if __name__ == '__main__':
         pass
 
     if False:
-        print "Test parse isolated objects"
+        print "Test parse isolated objects"        
 
         print parse('object', "[ 1 (string) <414141> null ]")
         print parse('object', "1")
@@ -390,6 +397,7 @@ if __name__ == '__main__':
         print parse('indirect', "1 0 obj\n(string)\nendobj")
         print parse('indirect', "1 0 obj\n<41414141>\nendobj")
         print parse('indirect', "1 0 obj\n[1 (string) <414141> null]\nendobj")
+        print parse('indirect', "1 0 obj\n<</key 1>>\nendobj\n2 0 obj\n<</key 2\nendobj") #TODO: test/fix It should return error(Its not just 1 object)
         
     bytes = 0
     files = 0
