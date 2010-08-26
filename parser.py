@@ -304,7 +304,7 @@ def bruteParser(pdf):
                     #fix lexspan
                     xml_iobject.set('lexstart', str(int(xml_iobject.get('lexstart'))+start))
                     xml_iobject.set('lexend', str(int(xml_iobject.get('lexend'))+start))
-                    #fix escape
+                    #FIX: fix escape
                     #WRONG offset!!!!!!!!!!!!
                     pl = payload(xml_iobject)
                     for e in escape_endstreams[:-1]:

@@ -1,7 +1,7 @@
 
 #Logging facility
 import logging
-#logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
+logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("OPAFLib")
 
 
@@ -56,7 +56,7 @@ def expand(e):
         file('%s.error'%filtername,'w').write(data)
     return False
 
-def expandObjStm(xml_pdf,iostream):
+def expandObjStm(iostream):
     '''
         This parses the ObjStm structure and add all the new indirect
         objects ass childs of the ObjStm node.
@@ -76,7 +76,7 @@ def expandObjStm(xml_pdf,iostream):
     object_stream = etree.Element('object_stream', lexstart=iostream[1].get('lexstart'),
                                                    lexend=iostream[1].get('lexend'), 
                                                    payload="")
-    iobjects = xml_pdf.xpath('//*[starts-with(local-name(),"indirect_object")]')
+    iobjects = iostream.xpath('//*[starts-with(local-name(),"indirect_object")]')
 
     for p in range(0,len(positions)-1):
         logger.info("Adding new object %s from objectstream %s"%((pointers[positions[p]],0),payload(iostream)))
@@ -90,7 +90,7 @@ def expandObjStm(xml_pdf,iostream):
         object_stream.append(io)
     iostream.append(object_stream)
     
-    iobjects = xml_pdf.xpath('//*[starts-with(local-name(),"indirect_object")]')
+    #iobjects = xml_pdf.xpath('//*[starts-with(local-name(),"indirect_object")]')
 
 
 def getStartxref(xml_pdf):

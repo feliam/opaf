@@ -57,10 +57,10 @@ if __name__ == '__main__':
     parser.add_option("-l", "--logfile", dest="log_file", default='opaf.log',
                       help="Dump log messages to LOG file.", metavar="LOG")
 
-    parser.add_option("-i", "--interactive", action="store_true", dest="shell", default=False,
+    parser.add_option("-i", "--interactive", action="store_false", dest="shell", default=False,
                       help="Throw interactive python shell")
 
-    parser.add_option("-g", "--graph", dest="graph", default='graph.png',
+    parser.add_option("-g", "--graph", dest="graph", default=None,
                       help="Generate and dump graph to GRAPH.", metavar="GRAPH")
 
     parser.add_option("-d", "--decompress", action="store_true", dest="decompress",
@@ -80,8 +80,8 @@ if __name__ == '__main__':
             logger.info("Loading %s ..."%filename) 
             pdf = file(filename,"r").read()            
         else:
-            assert options.interact == False, "Interactive not compatible with stdin feed"
-            pdf = file("/dev/sdtin","r").read()            
+            assert options.shell == False, "Interactive not compatible with stdin feed"
+            pdf = sys.stdin.read()            
 
         #Interact if asked
         if options.shell:
@@ -119,18 +119,16 @@ if __name__ == '__main__':
         if xml_pdf:
             #Get statistics...
             logger.info("There are %d indirect objects!"%len(xml_pdf.xpath('//*[ starts-with(local-name(),"indirect_object")] ')))
-            
             types = {}
+            filters = {}
             for ty in [payload(x) for x in xml_pdf.xpath('//*[starts-with(local-name(),"indirect_object")]/dictionary/dictionary_entry/name[@payload=enc("Type")]/../*[position()=2]')]:
                 types[ty] = types.get(ty,0)+1
-            logger.info("Objet /Type frequencies: %s"%repr(types))
+            logger.info("Object Type frequencies: %s"%repr(types))
 
-            filters = {}
             for ty in [payload(x) for x in xml_pdf.xpath('//indirect_object_stream/dictionary/dictionary_entry/name[@payload=enc("Filter")]/../*[position()=2]')]:
                 filters[ty] = filters.get(ty,0)+1
-            logger.info("Objet /Filter frequencies: %s"%repr(filters))
+            logger.info("Object Filter frequencies: %s"%repr(filters))
 
-         
     except Exception,e:
         print "OH!\n", e
         exc_type, exc_value, exc_traceback = sys.exc_info()
