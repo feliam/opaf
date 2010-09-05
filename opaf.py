@@ -51,7 +51,7 @@ if __name__ == '__main__':
 #    parser.add_option("-f", "--file", dest="pdf_filename",
 #                      help="The input pdf file", metavar="PDF")
 
-    parser.add_option("-x", "--xmlfile", dest="xml_filename",
+    parser.add_option("-x", "--xmlfile", dest="output_xml",
                       help="Generate an xml file.", metavar="XML")
 
     parser.add_option("-l", "--logfile", dest="log_file", default='opaf.log',
@@ -64,8 +64,16 @@ if __name__ == '__main__':
                       help="Generate and dump graph to GRAPH.", metavar="GRAPH")
 
     parser.add_option("-d", "--decompress", action="store_true", dest="decompress",
-                      help="Apply a filter pack to decompress and parse objec streams.")
+                      help="Apply a filter pack to decompress and parse object streams.")
 
+    parser.add_option("-f", "--filter", action="store_true", dest="filter",
+                      help="Filter out all shaddy object type and dictionary key.")
+
+    parser.add_option("-s", "--stats", action="store_false", dest="stats",
+                      help="Dump some statistics to the log.")
+
+    parser.add_option("-o", "--output_pdf", dest="output_pdf",
+                      help="RE-Generate a pdf file.", metavar="PDF")
 
 
     (options, args) = parser.parse_args()
@@ -96,17 +104,25 @@ if __name__ == '__main__':
             #A prepared script that flatten and fix the xml pdf.
             doEverything(xml_pdf)
 
-        if options.xml_filename and xml_pdf:
+        if options.filter and xml_pdf:
+            #Filter out types not in this list
+            filterTypes(xml_pdf,['Catalog','Pages','Page','XObject','Font','FontDescriptor','Encoding'])
+
+            filterDictionaryKeys(xml_pdf,
+                            ['Kids', 'Type', 'Resources', 'MediaBox', 'ColorSpace', 'ProcSet',  'Pages',
+                              'Count', 'Rotate', 'BaseFont', 'Subtype', 'Length', 'Root',  'Parent', 
+                              'Range', 'Font', 'FunctionType', 'Contents', 'Size', 'ExtGState' ])
+
+
+        if options.output_xml!=None and xml_pdf:
             logger.info("Writing XML in %s"%options.xml_filename)            
             file(options.xml_filename,'w').write(getXML(xml_pdf))
-        elif xml_pdf:
-            print getXML(xml_pdf),
 
         if options.graph and xml_pdf:
             logger.info("Generating GRAPH")
             graph(xml_pdf,options.graph)
 
-        if xml_pdf:
+        if options.stats and xml_pdf:
             #Get statistics...
             logger.info("There are %d indirect objects!"%len(xml_pdf.xpath('//*[ starts-with(local-name(),"indirect_object")] ')))
             types = {}
@@ -118,6 +134,11 @@ if __name__ == '__main__':
             for ty in [payload(x) for x in xml_pdf.xpath('//indirect_object_stream/dictionary/dictionary_entry/name[@payload=enc("Filter")]/../*[position()=2]')]:
                 filters[ty] = filters.get(ty,0)+1
             logger.info("Object Filter frequencies: %s"%repr(filters))
+
+        #Regenerates PDF (it ignores actual XREF)
+        if options.output_pdf!=None and xml_pdf:
+            file(options.output_pdf,'w').write(str(xmlToPDF(xml_pdf)))
+
 
     except Exception,e:
         print "OH!\n", e

@@ -1,16 +1,17 @@
 
+
+
+from parser import parse,bruteParser,normalParser,xrefParser,multiParser
+from xmlast import payload,setpayload,xmlToPy,etree,create_node
+
+
+from filters import defilterData
+from xref import *
 #Logging facility
 import logging
 logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("OPAFLib")
 
-
-from parser import parse,bruteParser,normalParser,xrefParser,multiParser
-from xmlast import payload,setpayload,xmlToPy,etree
-
-
-from filters import defilterData
-from xref import *
 
 def expand(e):
     '''
@@ -332,9 +333,51 @@ def getXML(xml_pdf):
             logger.error("Exception generating the XML (%s)"%ex)
 
     return etree.tostring(output_xml,  pretty_print=True)
+
+
+def filterTypes(xml_pdf,
+                permited=[ 'Catalog', 'Pages', 'Page', 'XObject', 'Font', 'FontDescriptor', 'Encoding' ]):
+        '''
+            Filter out all Object wich type is not in this list
+        '''
+        types = set([])
+        for ty in xml_pdf.xpath('//dictionary/dictionary_entry/name[@payload=enc("Type")]/../*[position()=2]'):
+            types.add(payload(ty))
+        logger.info("Found this types:%s"%types)
+
+        for ty in xml_pdf.xpath('//dictionary/dictionary_entry/name[@payload=enc("Type")]/../*[position()=2]'):
+            if not payload(ty) in permited:
+                tyy = ty.xpath('./../../../dictionary')[0]
+                logger.info("Setting to null %s(a %s)"%(payload(tyy.getparent()),tyy.tag))
+                tyy.getparent().replace(tyy,create_node('null','(-1,-1)'))
+        #Clear indirect object streams with null dictionary
+        for ios in xml_pdf.xpath('//*[starts-with(local-name(),"indirect_object")]/null[position()=1]/..') :
+            logger.info("Clearing indirect object %s"%payload(ios))
+            ios.getparent().remove(ios)
+
+def filterDictionaryKeys(xml_pdf,permited=None):
+        '''
+            Filter out any dictionary entry wich key is not in the passed list
+        '''
+        
+        if permited == None:
+            permited = ['Kids', 'Type', 'Resources', 'MediaBox', 'ColorSpace', 'ProcSet',  'Pages',
+                          'Count', 'Rotate', 'BaseFont', 'Subtype', 'Length', 'Root',  'Parent', 
+                          'Range', 'Font', 'FunctionType', 'Contents', 'Size', 'ExtGState' ]
+
+        #Dictionary permited Dictionary keys
+        dkeys = set([])
+        for ty in xml_pdf.xpath('//dictionary/dictionary_entry/name[position()=1]'):
+            dkeys.add(payload(ty))
+        logger.info("Found this differen dictionary keys:%s"%dkeys)
+
+        for ty in list(xml_pdf.xpath('/*/dictionary/dictionary_entry/name[position()=1]')):
+            if not payload(ty) in permited:
+                ty.getparent().getparent().remove(ty.getparent())
+
     
 from miniPDF import *
-import math
+import math 
 def xmlToPDF(xml_pdf):
     '''
         This will generate a pdf based on the indirect objects in the xml.
@@ -447,7 +490,7 @@ def xmlToPDF(xml_pdf):
         uref = x.obj[0]
         del(x.obj[0])
         try:
-            print "Fixing", repr((uref.n,uref.v)), "with", pdf_obj[repr((uref.n,uref.v))]
+            logger.info("Fixing %s with %s"%( repr((uref.n,uref.v)), str(pdf_obj[repr((uref.n,uref.v))])[:10]))
             x.obj.append(pdf_obj[repr((uref.n,uref.v))])
         except:
             logger.info("Reference %s not found in file.Linking it to null"%(uref.n,uref.v))
