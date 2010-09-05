@@ -89,18 +89,8 @@ if __name__ == '__main__':
 
         if pdf:
             #parse
-            #fallback chain of different type of parsing algorithms
             logger.info("Parsing parsing parsing ...") 
-            xml_pdf = None
-            if xml_pdf == None:
-                xml_pdf = normalParser(pdf)
-            if xml_pdf == None:
-                logger.info("PDF is NOT a sequence of objects as it SHALL be, for discussion see http://bit.ly/coRMtc")
-                xml_pdf = bruteParser(pdf)
-            if xml_pdf == None:
-                xml_pdf = xrefParser(pdf)
-            if xml_pdf == None:
-                logger.info("Couldn't parse it. Damn!")
+            xml_pdf = multiParser(pdf)
 
         if options.decompress and xml_pdf:
             #A prepared script that flatten and fix the xml pdf.

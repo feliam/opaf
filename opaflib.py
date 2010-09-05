@@ -5,7 +5,7 @@ logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("OPAFLib")
 
 
-from parser import parse,bruteParser,normalParser,xrefParser
+from parser import parse,bruteParser,normalParser,xrefParser,multiParser
 from xmlast import payload,setpayload,xmlToPy,etree
 
 
@@ -217,6 +217,13 @@ def getTypeOfStream(xml_pdf):
     ty = xml_pdf.xpath('.//indirect_object_stream/dictionary/dictionary_entry/name[@payload=enc("Type")]/../*[position()=2]')
     return len(ty)==0 and None or ty[0]
 
+def getTypeOf(xml_pdf):
+    '''
+        Returns ty Type of the dictionary object in xml_pdf.
+    '''
+    ty = xml_pdf.xpath('./dictionary/dictionary_entry/name[@payload=enc("Type")]/../*[position()=2]')
+    return len(ty)==0 and None or ty[0]
+
 
 def doEverything(xml_pdf):
     '''
@@ -326,5 +333,127 @@ def getXML(xml_pdf):
 
     return etree.tostring(output_xml,  pretty_print=True)
     
+from miniPDF import *
+import math
+def xmlToPDF(xml_pdf):
+    '''
+        This will generate a pdf based on the indirect objects in the xml.
+        BUG: It ignores the present cross reference so it wont respect deleted objects
+    '''
+    def _xmlToPDF(xml, urefs=[]):
+        '''
+            This traslate a xml-pdf direct object into its python version.
+            I will copy things and changes will not be propagated.
+        '''
+        if xml.tag == 'name':
+            return PDFName(payload(xml))
+        if xml.tag == 'string':
+            return PDFString(payload(xml))
+        elif xml.tag == 'number':
+            f = float(payload(xml))
+            if (math.floor(f) == f):
+                return PDFNum(int(f))
+            else:
+                return PDFNum(f)
+        elif xml.tag == 'bool':
+            return PDFBool({'True':True,'False':False}[payload(xml)])
+        elif xml.tag == 'null':
+            return PDFNull()
+        elif xml.tag == 'R':
+            n,v = tuple([int(x) for x in payload(xml)[1:-1].split(",")])
+            ref = PDFRef(UnResolved(n,v)) 
+            urefs.append(ref)
+            return ref
+    #Recursive ones...
+        elif xml.tag == 'dictionary_entry':
+            assert xml[0].tag == 'name', 'First dictionary entry child yould be a name'        
+            return (payload(xml[0]), _xmlToPDF(xml[1],urefs))
+        elif xml.tag == 'dictionary':
+            entries = dict([_xmlToPDF(c,urefs) for c in xml])
+            assert len(entries) == len(xml), 'Number of entries py and xml dictionary should match ' 
+            return PDFDict(entries)
+        elif xml.tag == 'array':
+            return PDFArray([_xmlToPDF(c,urefs) for c in xml])
+        else:
+            raise Exception("UnImplemented %s"%xml.tag)
+    root = getRoot(xml_pdf)
+    if root == None:
+        logger.error("Broken startxref, searching any /Root reference")
+        roots = xml_pdf.xpath('//dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Root"]/../R')
+        logger.error("%d /Root references found!"%len(roots))
+        if len(roots) != 0:                
+            root_ref = payload(roots[-1])
+            logger.error("Using last reference %s at %d."%(root_ref, roots[-1].get('lexpos')))
+            #Get the Root
+            roots = xml_pdf.xpath('//indirect_object[dec(@payload)="%s"]'%root_ref)            
+            if len(roots) != 1:
+                logger.error('Should be only one Indirect object with id %s.'%root_ref)
+                root = roots[0]
+
+    if root == None:
+        logger.error("Could not find a /Root reference!")
+        logger.error("Searching wildy for a Catalog")
+        catalogs = xml_pdf.xpath('//dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Type"]/../name[position()=2 and dec(@payload)="Catalog"]/../../..')
+    else:
+        catalogs = root.xpath('.//dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Type"]/../name[position()=2 and dec(@payload)="Catalog"]/../../..')
+    
+    if len(catalogs) == 0:
+        logger.error("Couldn't find a Catalog")
+        catalogs = [None]
+    elif len(catalogs) > 1:
+        logger.error("Found %d Catalogs using the lastone found"%len(catalogs))
+    catalog = catalogs[-1]
+        
+    if catalog == None:
+        logger.error("Couldn't find a Catalog. TODO: try /Pages")
+        raise "NO-PARSE!"
+
+
+    #Construct a list of all reacheable objects...
+    reached = { payload(catalog): catalog }
+    Rs = set([])
+    flag = True
+    while flag:
+        flag = False
+        #For all objects we already reach
+        for o in reached.values():
+            #for all references in the objects we already reach...
+            for R in o.xpath('.//R') :
+                ref = payload(R)
+                #If we don't have it yet in the reacheable list.. add it
+                if not ref in reached.keys():
+                    #Something is added to the reached list.. keep iterating
+                    obj = getIndirectObject(xml_pdf, ref)
+                    if obj != None:
+                        reached[ref]=obj
+                        flag = True
+                    else:
+                        R.getparent().replace(R,create_node('null','(-1,-1)'))
+
+    doc = PDFDoc()
+    pdf_obj = {}
+    urefs = []
+    ios = xml_pdf.xpath('//*[starts-with(local-name(),"indirect_object")]')
+    for old_ref, o in reached.items():
+        if o.tag == 'indirect_object':
+            pdf_obj[old_ref] = _xmlToPDF(o[0],urefs)
+        if o.tag == 'indirect_object_stream':
+            pdf_obj[old_ref] = PDFStream(_xmlToPDF(o[0],urefs),payload(o[1]))
+
+    
+    for o in pdf_obj.values():
+        doc.add(o)
+    for x in urefs:
+        uref = x.obj[0]
+        del(x.obj[0])
+        try:
+            print "Fixing", repr((uref.n,uref.v)), "with", pdf_obj[repr((uref.n,uref.v))]
+            x.obj.append(pdf_obj[repr((uref.n,uref.v))])
+        except:
+            logger.info("Reference %s not found in file.Linking it to null"%(uref.n,uref.v))
+
+    doc.setRoot(pdf_obj[payload(catalog)])
+    return doc
+
 
 

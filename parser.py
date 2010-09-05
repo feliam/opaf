@@ -378,6 +378,23 @@ def xrefParser(pdf):
             assert False, "uninmplemented"                    
     #cri cri...
 
+def multiParser(pdf):
+    ''' 
+        Try the different parsing strategies in some preference order...
+    '''
+    #fallback chain of different type of parsing algorithms
+    xml_pdf = None
+    if xml_pdf == None:
+        xml_pdf = normalParser(pdf)
+    if xml_pdf == None:
+        logger.info("PDF is NOT a sequence of objects as it SHALL be, for discussion see http://bit.ly/coRMtc")
+        xml_pdf = bruteParser(pdf)
+    if xml_pdf == None:
+        xml_pdf = xrefParser(pdf)
+    if xml_pdf == None:
+        logger.info("Couldn't parse it. Damn!")
+    return xml_pdf
+    
 if __name__ == '__main__':
     try:
         import psyco

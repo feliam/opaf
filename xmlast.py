@@ -77,6 +77,5 @@ def xmlToPy(e,paths={}):
     elif e.tag == 'array':
         return [xmlToPy(c,paths) for c in e]
     assert False, logger.error("It didn't make it to its python form...%s",e)
-            
 
 
