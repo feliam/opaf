@@ -115,8 +115,8 @@ if __name__ == '__main__':
 
 
         if options.output_xml!=None and xml_pdf:
-            logger.info("Writing XML in %s"%options.xml_filename)            
-            file(options.xml_filename,'w').write(getXML(xml_pdf))
+            logger.info("Writing XML in %s"%options.output_xml)            
+            file(options.output_xml,'w').write(getXML(xml_pdf))
 
         if options.graph and xml_pdf:
             logger.info("Generating GRAPH")
