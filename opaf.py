@@ -43,7 +43,7 @@ It's in an early stage but more or less it should do something like this...
 import logging
 from optparse import OptionParser
 import sys,math,traceback
-from opaflib import *
+from opaf.opaflib import *
 
 
 if __name__ == '__main__':
