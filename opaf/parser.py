@@ -230,10 +230,10 @@ def normalParser(pdf):
         xml_element = parse('pdf',pdf)
         ret = xml_elemente!=None and tree.ElementTree(xml_element) or None
     except Exception,e:
-        print logger.error("Parsing Error %s"%e)
+        logger.error("Error in Normal parsing... %s"%e)
     return ret
-        
-        
+
+
 
 def bruteParser(pdf):
     '''
