@@ -257,7 +257,7 @@ def doEverything(xml_pdf):
     iobjects = xml_pdf.xpath('//*[starts-with(local-name(),"indirect_object")]')
 
     for iostream in iobjstreams:
-        expandObjStm(xml_pdf,iostream)
+        expandObjStm(iostream)
 
 
     #List of indirect objects.
