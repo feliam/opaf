@@ -225,11 +225,13 @@ def normalParser(pdf):
         Assuming endstreams are no appearing inside streams 
         we can apply an eager parser and do not Need the xref
     '''
+    ret = None
     try:
-        return etree.ElementTree(parse('pdf',pdf))
+        xml_element = parse('pdf',pdf)
+        ret = xml_elemente!=None and tree.ElementTree(xml_element) or None
     except Exception,e:
-        logger.error("Parsing a %s"%tag)
-    return None
+        print logger.error("Parsing Error %s"%e)
+    return ret
         
         
 
