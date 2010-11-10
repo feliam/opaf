@@ -344,7 +344,7 @@ class RunLengthDecode(PDFFilter):
 
     def decode(data):
         inp = StringIO(data)
-        out = StringIO(data)
+        out = StringIO()
         try:
             while True:
                 n = ord(inp.read(1))
@@ -354,11 +354,11 @@ class RunLengthDecode(PDFFilter):
                     out.write(inp.read(1)*(257-n))
         except:
             pass
-        return getvalue()
+        return out.getvalue()
 
     def encode(data):
         #Trivial encoding x2 in size
-        out = StringIO(data)
+        out = StringIO()
         for c in data:
             out.write("\x00"+c)
         return out.getvalue()
