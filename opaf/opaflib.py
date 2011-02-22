@@ -228,9 +228,9 @@ def doEverything(xml_pdf):
         This script will try to expand, parse an fix references for every iobject 
     '''
     #Canonize names
-#TODO:
-#    logger.info("Canonizing key names")
-#    canonizeNames(xml_pdf)
+    #TODO:
+    #    logger.info("Canonizing key names")
+    #    canonizeNames(xml_pdf)
 
     #List of indirect objects.
     logger.info("Updating list of reacheable indirect objects")
@@ -383,7 +383,7 @@ def xmlToPDF(xml_pdf):
     def _xmlToPDF(xml, urefs=[]):
         '''
             This traslate a xml-pdf direct object into its python version.
-            I will copy things and changes will not be propagated.
+            Things are copied and changesare not propagated.
         '''
         if xml.tag == 'name':
             return PDFName(payload(xml))
@@ -406,7 +406,7 @@ def xmlToPDF(xml_pdf):
             return ref
     #Recursive ones...
         elif xml.tag == 'dictionary_entry':
-            assert xml[0].tag == 'name', 'First dictionary entry child yould be a name'        
+            assert xml[0].tag == 'name', 'First dictionary entry child should be a name'        
             return (payload(xml[0]), _xmlToPDF(xml[1],urefs))
         elif xml.tag == 'dictionary':
             entries = dict([_xmlToPDF(c,urefs) for c in xml])
@@ -493,6 +493,127 @@ def xmlToPDF(xml_pdf):
             logger.info("Reference %s not found in file.Linking it to null"%(uref.n,uref.v))
 
     doc.setRoot(pdf_obj[payload(catalog)])
+    return doc
+
+
+def xmlToPython(xml_pdf):
+    '''
+        This will generate a python file representation of the pdf.
+        BUG: It ignores the present cross reference so it wont respect deleted objects
+    '''
+    def _xmlToPy(xml):
+        '''
+            This traslate a xml-pdf direct object into its python version.
+            Things are copied and changesare not propagated.
+        '''
+        if xml.tag == 'name':
+            return 'PDFName("%s")'%payload(xml).encode('string_escape')
+        if xml.tag == 'string':
+            return 'PDFString("%s")'%payload(xml).encode('string_escape')
+        elif xml.tag == 'number':
+            f = float(payload(xml))
+            return 'PDFNum(%s)'%f
+        elif xml.tag == 'bool':
+            return 'PDFBool(%s)'%({'True':True,'False':False}[payload(xml)])
+        elif xml.tag == 'null':
+            return 'PDFNull()'
+        elif xml.tag == 'R':
+            n,v = tuple([int(x) for x in payload(xml)[1:-1].split(",")])
+            return 'PDFRef(%s)'%'R%d_%d'%(n,v)
+    #Recursive ones...
+        elif xml.tag == 'dictionary_entry':
+            assert xml[0].tag == 'name', 'First dictionary entry child should be a name'        
+            return (payload(xml[0]), _xmlToPy(xml[1]))
+        elif xml.tag == 'dictionary':
+            entries = ['%s: %s'%(repr(x),y) for x,y in [_xmlToPy(c) for c in xml]]
+            assert len(entries) == len(xml), 'Number of entries py and xml dictionary should match ' 
+            return 'PDFDict({%s})\n'%(','.join(entries))
+        elif xml.tag == 'array':
+            return 'PDFArray([%s])\n'%(','.join([_xmlToPy(c) for c in xml]))
+        else:
+            raise Exception("UnImplemented %s"%xml.tag)
+    root = getRoot(xml_pdf)
+    if root == None:
+        logger.error("Broken startxref, searching any /Root reference")
+        roots = xml_pdf.xpath('//dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Root"]/../R')
+        logger.error("%d /Root references found!"%len(roots))
+        if len(roots) != 0:                
+            root_ref = payload(roots[-1])
+            logger.error("Using last reference %s at %d."%(root_ref, roots[-1].get('lexpos')))
+            #Get the Root
+            roots = xml_pdf.xpath('//indirect_object[dec(@payload)="%s"]'%root_ref)            
+            if len(roots) != 1:
+                logger.error('Should be only one Indirect object with id %s.'%root_ref)
+                root = roots[0]
+
+    if root == None:
+        logger.error("Could not find a /Root reference!")
+        logger.error("Searching wildy for a Catalog")
+        catalogs = xml_pdf.xpath('//dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Type"]/../name[position()=2 and dec(@payload)="Catalog"]/../../..')
+    else:
+        catalogs = root.xpath('.//dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Type"]/../name[position()=2 and dec(@payload)="Catalog"]/../../..')
+    
+    if len(catalogs) == 0:
+        logger.error("Couldn't find a Catalog")
+        catalogs = [None]
+    elif len(catalogs) > 1:
+        logger.error("Found %d Catalogs using the lastone found"%len(catalogs))
+    catalog = catalogs[-1]
+        
+    if catalog == None:
+        logger.error("Couldn't find a Catalog. TODO: try /Pages")
+        raise "NO-PARSE!"
+
+
+    #Construct a list of all reacheable objects...
+    reached = { payload(catalog): catalog }
+    Rs = set([])
+    flag = True
+    while flag:
+        flag = False
+        #For all objects we already reach
+        for o in reached.values():
+            #for all references in the objects we already reach...
+            for R in o.xpath('.//R') :
+                ref = payload(R)
+                #If we don't have it yet in the reacheable list.. add it
+                if not ref in reached.keys():
+                    #Something is added to the reached list.. keep iterating
+                    obj = getIndirectObject(xml_pdf, ref)
+                    if obj != None:
+                        reached[ref]=obj
+                        flag = True
+                    else:
+                        R.getparent().replace(R,create_node('null','(-1,-1)'))
+
+    doc = 'from miniPDF import *\ndoc = PDFDoc()\n'
+    pdf_objs_dec = ""
+    pdf_objs_def = ""
+    ios = xml_pdf.xpath('//*[starts-with(local-name(),"indirect_object")]')
+    for old_ref, o in reached.items():
+        n,v = tuple([int(x) for x in old_ref[1:-1].split(",")])        
+        if o.tag == 'indirect_object':
+            if o[0].tag == 'dictionary':
+              pdf_objs_dec += 'R%d_%d = PDFDict()\n'%(n,v)
+              for obj in o[0]:
+                name, obj = _xmlToPy(obj)
+                pdf_objs_def += 'R%d_%d.add("%s",%s)\n'%(n,v,name.encode('string_escape'), obj)
+            else: 
+              pdf_objs_def += 'R%d_%d = %s\n'%(n,v,_xmlToPy(o[0]))
+        if o.tag == 'indirect_object_stream':
+            pdf_objs_dec += 'R%d_%d = PDFStream()\n'%(n,v)
+            name, obj = _xmlToPy(o[0][0])
+            pdf_objs_def += 'R%d_%d.add("%s",%s)\n'%(n,v,name.encode('string_escape'),obj)
+            pdf_objs_def += 'R%d_%d.stream = """%s"""\n'%(n,v,payload(o[1]).encode('string_escape'))
+
+    doc += pdf_objs_dec
+    doc += pdf_objs_def
+
+    for old_ref, o in reached.items():
+      n,v = tuple([int(x) for x in old_ref[1:-1].split(",")])        
+      doc += 'doc.add(R%d_%d)\n'%(n,v)
+    n,v = tuple([int(x) for x in payload(catalog)[1:-1].split(",")])        
+    doc+='doc.setRoot(R%d_%d)\nprint doc\n'%(n,v)
     return doc
 
 

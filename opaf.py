@@ -75,6 +75,9 @@ if __name__ == '__main__':
     parser.add_option("-o", "--output_pdf", dest="output_pdf",
                       help="RE-Generate a pdf file.", metavar="PDF")
 
+    parser.add_option("-p", "--output_python", dest="output_py",
+                      help="RE-Generate a python-pdf file.", metavar="PY")
+
 
     (options, args) = parser.parse_args()
     logging.basicConfig(filename=options.log_file,level=logging.DEBUG)
@@ -138,6 +141,9 @@ if __name__ == '__main__':
         #Regenerates PDF (it ignores actual XREF)
         if options.output_pdf!=None and xml_pdf:
             file(options.output_pdf,'w').write(str(xmlToPDF(xml_pdf)))
+
+        if options.output_py!=None and xml_pdf:
+            file(options.output_py,'w').write(str(xmlToPython(xml_pdf)))
 
 
     except Exception,e:

@@ -229,7 +229,7 @@ def normalParser(pdf):
     try:
         xml_element = parse('pdf',pdf)
         ret = xml_element!=None and etree.ElementTree(xml_element) or None
-     except Exception,e:
+    except Exception,e:
         logger.error("Error in Normal parsing... %s"%e)
     return ret
 
