@@ -35,7 +35,7 @@ PDF projection.""",
           'Topic :: Software Development :: Libraries :: Python Modules',
           'Natural Language :: English',
           ],
-      packages=['opaf'],
+      packages=['opaflib'],
       scripts=['opaf.py'],
       install_requires=['ply', 'lxml'],
       )
