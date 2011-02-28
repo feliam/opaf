@@ -3,7 +3,6 @@ import math
 
 #Logging facility
 import logging
-#logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("OPAFXML")
 
 #Used to set/get and use the base64 encoding inse and out xpath

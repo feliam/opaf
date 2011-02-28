@@ -9,7 +9,6 @@ TOKEN = lex.TOKEN
 
 #logging facility
 import logging
-#logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("LEXER")
 
 # Tokens

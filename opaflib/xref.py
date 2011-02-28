@@ -1,5 +1,5 @@
 import StringIO
-from opaf.opaflib import *
+from opaflib import *
 ####
 #### XrefStm
 ####

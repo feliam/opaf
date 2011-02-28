@@ -6,8 +6,8 @@ import sys,re
 import traceback
 
 import ply.yacc as yacc
-from opaf.lexer import tokens, LexerException # Get the token map from the lexer.  This is required.
-from opaf.xmlast import create_node, payload, setpayload, expand_span, etree
+from opaflib.lexer import tokens, LexerException # Get the token map from the lexer.  This is required.
+from opaflib.xmlast import create_node, payload, setpayload, expand_span, etree
 
 #logging facility
 import logging

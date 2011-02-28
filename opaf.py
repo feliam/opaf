@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 ####################################################################
 ## felipe.andres.manzano@gmail.com  http://feliam.wordpress.com/  ##
 ## twitter.com/feliam        http://www.linkedin.com/in/fmanzano  ##
@@ -43,7 +44,7 @@ It's in an early stage but more or less it should do something like this...
 import logging
 from optparse import OptionParser
 import sys,math,traceback
-from opaf.opaflib import *
+from opaflib import *
 
 
 if __name__ == '__main__':

@@ -1,9 +1,9 @@
-from opaf.parser import parse,bruteParser,normalParser,xrefParser,multiParser
-from opaf.xmlast import payload,setpayload,xmlToPy,etree,create_node
+from opaflib.parser import parse,bruteParser,normalParser,xrefParser,multiParser
+from opaflib.xmlast import payload,setpayload,xmlToPy,etree,create_node
 
 
-from opaf.filters import defilterData
-from opaf.xref import *
+from opaflib.filters import defilterData
+from opaflib.xref import *
 #Logging facility
 import logging
 logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
