@@ -14,9 +14,10 @@ logger = logging.getLogger("FILTER")
 #in the stream dictionary.
 
 class PDFFilter(object):
-    def __init__(self,params=None):
-        self.setParams(params)
-        self.default=None
+    def __init__(self,params={}):
+        self.default={}
+        self.params = {}
+        self.params.update(params)
         
     def getDefaultParams(self):
         return self.default
@@ -24,11 +25,10 @@ class PDFFilter(object):
     def getParams(self):
         return (self.params == {} or self.params == None) and self.getDefaultParams() or self.params
         
-    def setParams(self,params=None):
+    def setParams(self,params={}):
         self.params = {}
-        self.params.update(self.getDefaultParams())
+        self.params.update(self.default)
         self.params.update(params)
-        #self.params =  not params and self.getDefaultParams() or params
         
     def decode(data):
         pass
@@ -49,7 +49,7 @@ class ASCIIHexDecode(PDFFilter):
        if a 0 (zero) followed the last digit.
     '''
     default = None
-    def __init__(self,params=None):
+    def __init__(self,params={}):
         PDFFilter.__init__(self)
 
     def decode(self, data):
@@ -59,10 +59,10 @@ class ASCIIHexDecode(PDFFilter):
                 result+=c
             elif c == '>':
                 break
-            elif c not in "\x20\r\n\t\x0c\x00":
+            elif c in list(" \r\n\t\x0c\x00"):
                 continue
             else:
-                raise "ERROR"
+                raise Exception("ERROR in %02x(%s)"%(ord(c),c))
         result = result + '0'*(len(result)%2)
         return result.decode('hex')
 
@@ -386,5 +386,7 @@ def filterData(filtername,stream,params=None):
         return ASCIIHexDecode(params).encode(stream)
     
 if __name__ == "__main__":
-    pass
-
+    ahd = ASCIIHexDecode()
+    assert 'ab.cde' == ahd.decode("61 62 2e6364   65")
+    assert 'ab.cdep' == ahd.decode('61 62 2e6364   657>')
+    assert 'p' == ahd.decode('7>')

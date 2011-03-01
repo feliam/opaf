@@ -279,9 +279,7 @@ def doEverything(xml_pdf):
 #### GRAPH
 ####
 def graph(xml_pdf,png=None):
-    import matplotlib.pyplot
     import networkx as nx
-    import matplotlib.pyplot as plt
     try:
         from networkx import graphviz_layout
     except ImportError:
@@ -303,12 +301,14 @@ def graph(xml_pdf,png=None):
         pass
 
     pos=nx.graphviz_layout(G,prog='neato',args='')
-    plt.figure(figsize=(8,8))
     nx.draw(G,pos,node_size=20,alpha=0.5,node_color="blue", with_labels=False)
-    plt.axis('equal')
     if png :
         plt.savefig(png)
     else:
+        import matplotlib.pyplot
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(8,8))
+        plt.axis('equal')
         plt.show()
 
 def getXML(xml_pdf):
