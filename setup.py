@@ -8,7 +8,7 @@ from setuptools import setup
 
 
 setup(name='OPAF',
-      version='0.9.1',
+      version='0.9.2',
       description='Open PDF Analysis Framework',
       long_description="""
 PDF files rely on a complex file structure constructed from a set tokens and 
@@ -38,5 +38,5 @@ PDF projection.""",
           ],
       packages=['opaflib'],
       scripts=['opaf.py'],
-      install_requires=['ply', 'lxml'],
+      install_requires=['ply', 'lzw', 'lxml'],
       )
