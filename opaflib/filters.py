@@ -5,7 +5,8 @@ logger = logging.getLogger("FILTER")
 
 #This was robbed/ ported from gohstcrip C code/ coded insanely fast.
 #TODO: document and test A LOT, add at least 1 test per filter/perams convination
-
+#TODO: check filter parameters consistency in every case
+#TODO: test Predictor
 
 #7.4   Filters
 #Stream filters are introduced in 7.3.8, "Stream Objects." An option when reading 
@@ -16,18 +17,16 @@ logger = logging.getLogger("FILTER")
 class PDFFilter(object):
     def __init__(self,params={}):
         self.default={}
-        self.params = {}
-        self.params.update(params)
-        
-    def getDefaultParams(self):
-        return self.default
+        self.params = params
         
     def getParams(self):
-        return (self.params == {} or self.params == None) and self.getDefaultParams() or self.params
+        if self.params == {}:
+            return self.default
+        else:
+            return self.params
         
     def setParams(self,params={}):
-        self.params = {}
-        self.params.update(self.default)
+        self.params = dict(self.default)
         self.params.update(params)
         
     def decode(data):
@@ -47,10 +46,17 @@ class ASCIIHexDecode(PDFFilter):
        Any other characters shall cause an error. If the filter encounters the EOD 
        marker after reading an odd number of hexadecimal digits, it shall behave as
        if a 0 (zero) followed the last digit.
+    >>> ahd = ASCIIHexDecode()
+    >>> ahd.decode("61 62 2e6364   65")
+    'ab.cde'
+    >>> ahd.decode('61 62 2e6364   657>')
+    'ab.cdep'
+    >>> ahd.decode('7>')
+    'p'
     '''
     default = None
     def __init__(self,params={}):
-        PDFFilter.__init__(self)
+        PDFFilter.__init__(self,params)
 
     def decode(self, data):
         result = ""
@@ -80,12 +86,28 @@ class ASCII85Decode(PDFFilter):
     the character z, with the 2-character sequence ~> as its EOD marker. The ASCII85Decode
     filter shall ignore all white-space characters. Any other characters, and any character
     sequences that represent impossible combinations in the ASCII base-85 encoding shall 
-    cause an error.
+    cause an error. The ASCII base-85 encoding uses the characters ! through u and the 
+    character z, with the 2-character sequence ~> as its EOD marker.
+
+    >>> a85 = ASCII85Decode()
+    >>> a85.decode('9jqo^BlbD-BleB1DJ+*+F(f,q')
+    'Man is distinguished'
+    >>> a85.decode('E,9)oF*2M7/c~>')
+    'pleasure.'
     '''
-    def __init__(self,params=None):
+    #This class is taken from ...
+    # base85.py: pure python base85 codec
+    #
+    # Copyright (C) 2008 Brendan Cully <brendan@kublai.com>
+    #
+    # This software may be used and distributed according to the terms of
+    # the GNU General Public License, incorporated herein by reference.
+
+    def __init__(self,params={}):
         #This does not work. Most streams encoded with this use all chars. TODO:recheck
-        #self._b85chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~"
-        self._b85chars = [chr(x) for x in range(0,0xff)]
+        #self._b85chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~"        
+        self.pad=True
+        self._b85chars = [chr(x) for x in range(ord('!'),ord('u')+1)]
         self._b85chars2 = [(a + b) for a in self._b85chars for b in self._b85chars]
         self._b85dec = {}
         self.default = {}
@@ -101,7 +123,7 @@ class ASCII85Decode(PDFFilter):
         #Cut the stream at the eod
         eod = text.find('~>')
         if eod != -1:
-            test=text[:eod]
+            text=text[:eod]
     
         l = len(text)
         out = []
@@ -109,13 +131,12 @@ class ASCII85Decode(PDFFilter):
             chunk = text[i:i+5]
             acc = 0
             for j, c in enumerate(chunk):
-                acc = acc * 85 + self._b85dec[c]
+                try:
+                    acc = acc * 85 + self._b85dec[c]
+                except KeyError:
+                    raise TypeError('Bad base85 character at byte %d' % (i + j))
                 
             #This does not work. Most streams encoded with this use all chars and overflow. TODO:recheck
-            #    try:
-            #        acc = acc * 85 + self._b85dec[c]
-            #    except KeyError:
-            #        raise TypeError('Bad base85 character at byte %d' % (i + j))
             #if acc > 4294967295:
             #    raise OverflowError('Base85 overflow in hunk starting at byte %d' % i)
             out.append(acc&0xffffffff)
@@ -143,12 +164,12 @@ class ASCII85Decode(PDFFilter):
         longs = len(text) >> 2
         words = struct.unpack('>%dL' % (longs), text)
 
-        out = ''.join(self._b85chars[(word // 52200625) % 85] +
+        out = ''.join([self._b85chars[(word // 52200625) % 85] +
                       self._b85chars2[(word // 7225) % 7225] +
                       self._b85chars2[word % 7225]
-                      for word in words)
+                      for word in words])
 
-        if self.pad:
+        if not self.pad:
             return out
 
         # Trim padding
@@ -159,7 +180,7 @@ class ASCII85Decode(PDFFilter):
         return out[:olen]
 
 
-
+#TODO TEEEEST!
 class Predictor():
     '''
     7.4.4.4   LZW and Flate Predictor Functions
@@ -277,13 +298,17 @@ class FlateDecode(PDFFilter):
                 'Columns' : 0,
                 'Colors' : 1,
                 'BitsPerComponent': 8}        
-    def __init__(self,params):
-        PDFFilter.__init__(self,params)
+    def __init__(self,params={}):
+        PDFFilter.__init__(self,self.default)
 
     def decode(self, data):
         p = self.getParams()
         data = data.decode('zlib')
-        data = Predictor(int(p['Predictor']),int(p['Columns']),int(p['BitsPerComponent'])).decode(data)
+        #TODO: wich convination of predictor/columns/bpc are valid???
+        predictor = int(p.get('Predictor',1))
+        columns = int(p.get('Columns',0))
+        bpc = int(p.get('BitsPerComponent',8))
+        data = Predictor(predictor,columns,bpc).decode(data)
         return data
 
     def encode(self, data):
@@ -336,18 +361,23 @@ class RunLengthDecode(PDFFilter):
        during decompression. If length is in the range 129 to 255, the following single byte shall
        be copied 257 - length (2 to 128) times during decompression. A length value of 128 shall 
        denote EOD.
+    >>> rl = RunLengthDecode()
+    >>> rl.decode('\x05123456\xfa7\x04abcde\x80junk')
+    '1234567777777abcde'
     '''
 
-    def __init__(self,params):
+    def __init__(self,params={}):
         PDFFilter.__init__(self,params)
 
-    def decode(data):
+    def decode(self,data):
         inp = StringIO(data)
         out = StringIO()
         try:
             while True:
                 n = ord(inp.read(1))
-                if n < 127:
+                if n == 128:
+                    break
+                if n < 128:
                     out.write(inp.read(n+1))
                 else:
                     out.write(inp.read(1)*(257-n))
@@ -355,7 +385,7 @@ class RunLengthDecode(PDFFilter):
             pass
         return out.getvalue()
 
-    def encode(data):
+    def encode(self,data):
         #Trivial encoding x2 in size
         out = StringIO()
         for c in data:
@@ -366,7 +396,7 @@ class RunLengthDecode(PDFFilter):
 
 
 ### filter multiplexers....
-def defilterData(filtername,stream,params=None):
+def defilterData(filtername,stream,params={}):
     logger.debug("Filtering stream with %s"%repr((filtername,params)))
     if filtername == "FlateDecode":
         return FlateDecode(params).decode(stream)
@@ -386,7 +416,8 @@ def filterData(filtername,stream,params=None):
         return ASCIIHexDecode(params).encode(stream)
     
 if __name__ == "__main__":
-    ahd = ASCIIHexDecode()
-    assert 'ab.cde' == ahd.decode("61 62 2e6364   65")
-    assert 'ab.cdep' == ahd.decode('61 62 2e6364   657>')
-    assert 'p' == ahd.decode('7>')
+    a = ASCII85Decode()
+    print a.decode('E,9)oF*2M7/c~>'),repr(a.decode("pleasure."))
+    print defilterData("FlateDecode",'x\x9c\xabN)-P0P\xc8-\xcdQH\xadH\xceP\xc0\xcf5\x043k\x01\xdf\x15\x11\x85\n')
+    import doctest
+    doctest.testmod()
