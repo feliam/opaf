@@ -278,39 +278,33 @@ def doEverything(xml_pdf):
 ####
 #### GRAPH
 ####
-def graph(xml_pdf,png=None):
-    import networkx as nx
-    try:
-        from networkx import graphviz_layout
-    except ImportError:
-        raise ImportError("This example needs Graphviz and either PyGraphviz or Pydot")
-
-
-    G=nx.DiGraph()
+def graph(xml_pdf,dot='default.dot'):
+    dotdata = "digraph  {\n"
     iobjects = getIndirectObjectsDict(xml_pdf)
+
+    nodes_added = set()
     for x in iobjects.keys():
-        G.add_node(x)
         for r in iobjects[x].xpath(".//R"):
-            G.add_edge(x,payload(r))            
+            dotdata += '\t"%s" -> "%s";\n'%(x,payload(r))
+            nodes_added.add(x)
+            nodes_added.add(payload(r))
+
+    for x in iobjects.keys():
+        if not x in nodes_added:
+            dotdata += '\t"%s";\n'%x
 
     try:
         root = getRoot(xml_pdf)
-        G.add_edge("trailer",payload(root))            
+        dotdata += '\t"trailer" -> "%s";\n'%payload(root)
     except Exception,e :
-        G.add_node("trailer")            
+        dotdata += '\t"%s";\n'%x
         pass
+    dotdata += '}\n'
 
-    pos=nx.graphviz_layout(G,prog='neato',args='')
-    nx.draw(G,pos,node_size=20,alpha=0.5,node_color="blue", with_labels=False)
-    if png :
-        plt.savefig(png)
-    else:
-        import matplotlib.pyplot
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(8,8))
-        plt.axis('equal')
-        plt.show()
+    logger.info("Writing graph to %s(a dot file). Download graphviz or try this http://rise4fun.com/Agl for render it."%dot)
 
+    file(dot,"w").write(dotdata)
+    
 def getXML(xml_pdf):
     ''' 
         Returns a string containing the prettyprinted XML of the pdf.

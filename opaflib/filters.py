@@ -62,7 +62,7 @@ class ASCIIHexDecode(PDFFilter):
             elif c in list(" \r\n\t\x0c\x00"):
                 continue
             else:
-                raise Exception("ERROR in %02x(%s)"%(ord(c),c))
+                raise Exception("ERROR decoding ASCIIHexDecode stream at character: %02x(%s)"%(ord(c),c))
         result = result + '0'*(len(result)%2)
         return result.decode('hex')
 
