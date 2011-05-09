@@ -1,7 +1,5 @@
 from opaflib.parser import parse,bruteParser,normalParser,xrefParser,multiParser
 from opaflib.xmlast import payload,setpayload,xmlToPy,etree,create_node
-
-
 from opaflib.filters import defilterData
 from opaflib.xref import *
 #Logging facility
@@ -9,6 +7,9 @@ import logging
 logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("OPAFLib")
 
+#This file is poorly designed.
+#Commands that work on xml ahould be separated from others
+#We need better comments and usage to use in an interactive console
 
 def expand(e):
     '''
@@ -40,7 +41,7 @@ def expand(e):
     #Expand/defilter data
     data = payload(e[1])
     try:
-        for filtername,param in reversed(zip(filters,params)):
+        for filtername,param in zip(filters,params):
             data = defilterData(filtername,data, param)
         setpayload(e[1],data)   
 

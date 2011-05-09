@@ -57,6 +57,13 @@ class FiltersTest(unittest.TestCase):
         flt = filters.FlateDecode()
         self._basicTest(flt,decode_tbl,random_strings=self.random_strings)
 
+    def testRunLengthDecode(self):
+        decode_tbl = [
+          ('\x05123456\xfa7\x04abcde\x80junk', '1234567777777abcde')
+          ]
+
+        flt = filters.RunLengthDecode()
+        self._basicTest(flt,decode_tbl,random_strings=self.random_strings)
 
 if __name__ == '__main__':
     unittest.main()

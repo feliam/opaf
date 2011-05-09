@@ -6,7 +6,6 @@ use_setuptools()
 
 from setuptools import setup
 
-
 setup(name='OPAF',
       version='0.9.2',
       description='Open PDF Analysis Framework',
@@ -36,7 +35,8 @@ PDF projection.""",
           'Topic :: Software Development :: Libraries :: Python Modules',
           'Natural Language :: English',
           ],
-      packages=['opaflib'],
+      packages=['opaflib','tests'],
       scripts=['opaf.py'],
       install_requires=['ply', 'lzw', 'lxml'],
+      test_suite = "tests"
       )

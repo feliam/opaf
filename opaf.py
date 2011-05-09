@@ -90,7 +90,7 @@ if __name__ == '__main__':
         if len(args)>0 :
             filename=args[0]
             logger.info("Loading %s ..."%filename) 
-            pdf = file(filename,"r").read()            
+            pdf = file(filename,"rb").read()            
         else:
             assert options.shell == False, "Interactive not compatible with stdin feed"
             pdf = sys.stdin.read()            

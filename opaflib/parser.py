@@ -195,7 +195,7 @@ def p_error(p):
     if not p:
         logger.error("EOF reached!")
     else:
-        logger.error("Syntax error at [%d:%d] %s %s"%(p.lexpos,p.endlexpos, p.value,p.type))
+        logger.error("Syntax error at [%d] %s %s"%(p.lexpos, p.value,p.type))
 
 #Used in BRUTE parsing
 def p_pdf_brute_end(p):
@@ -399,15 +399,16 @@ def multiParser(pdf):
     
 if __name__ == '__main__':
     try:
-        import psyco
-        psyco.full()
+        pass
+        #import psyco
+        #psyco.full()
     except:
         pass
 
-    if False:
+    if True:
         print "Test parse isolated objects"        
 
-        print parse('object', "[ 1 (string) <414141> null ]")
+        print parse('object', "[ 1 (string) <414141> null ]").tag
         print parse('object', "1")
         print parse('object', "(string)")
         print parse('object', "<41414141>")
