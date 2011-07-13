@@ -25,11 +25,13 @@ states = ( ('string', 'exclusive'),
 #Unique Lexer exception to comunicate error conditions to upper dimensions..
 class LexerException(Exception):
     def __init__(self,t,txt):
+        super(LexerException,self).__init__()
         self.pos=t.lexer.lexpos
         self.data=t.lexer.lexdata[t.lexer.lexpos:10]
         self.txt = txt
     def __str__(self):
         return "%s at %d[%s]"%(self.txt,self.pos,self.data.encode('hex'))                
+
 #7.2.2 Character Set
 #The PDF character set is divided into three classes, called regular,
 #delimiter, and white-space characters. This classification determines
@@ -360,13 +362,13 @@ def t_error(t):
     c = t.lexer.lexdata[t.lexer.lexpos]
     logger.error("Error at pos %d. Skipping byte %02x[%s]"%(t.lexer.lexpos, ord(c), c.isalpha() and c or '?'))
     raise LexerException(t,"Scanning limbo")
-#    t.lexer.skip(1)
 
 #ignore white spaces
 t_ignore = white_spaces
 
 # Build the lexer
-lex.lex(debug=False,errorlog=lex.NullLogger())
+def get_lexer():
+    return lex.lex(debug=False,errorlog=lex.NullLogger())
 
 if __name__ == '__main__':
     try:

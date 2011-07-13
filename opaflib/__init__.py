@@ -613,3 +613,15 @@ def xmlToPython(xml_pdf):
 
 
 
+def get_numgen(xml_element):
+    ''' Search the object and generation number  of any pdf element '''
+    if xml_element.tag.startswith('indirect'):
+        return tuple([int(i) for i in payload(xml_element)[1:-1].split(',')])
+    else:
+        return get_numgen(xml_element.getparent())
+
+
+def isEncrypted(xml_pdf):
+    ''' Check if parse pdf has an Encryption dictionary '''
+    return len(getMainXref(xml_pdf).xpath('./dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Encrypt"]')) == 1
+

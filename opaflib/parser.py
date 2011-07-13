@@ -6,7 +6,7 @@ import sys,re
 import traceback
 
 import ply.yacc as yacc
-from opaflib.lexer import tokens, LexerException # Get the token map from the lexer.  This is required.
+from opaflib.lexer import tokens, LexerException, get_lexer # Get the token map from the lexer.  This is required.
 from opaflib.xmlast import create_node, payload, setpayload, expand_span, etree
 
 #logging facility
@@ -122,7 +122,7 @@ def p_indirect(p):
 
 def p_indirect_object(p):
     ''' indirect_object : OBJ object ENDOBJ '''
-    p[0] = create_node('indirect_object',p.lexspan(0),p[1], [p[2]])
+    p[0] = create_node('indirect_object', p.lexspan(0), p[1], [p[2]])
     
 def p_indirect_object_stream(p):
     ''' indirect_object_stream : OBJ dictionary STREAM_DATA ENDOBJ '''
@@ -188,10 +188,9 @@ def p_body_object(p):
 def p_body_void(p):
     ''' body : '''
     p[0] = []
-#    p[0] = create_node('body',p.lexspan(0),None, [])
 
-#start = 'pdf'
 def p_error(p):
+    print p
     if not p:
         logger.error("EOF reached!")
     else:
@@ -207,15 +206,23 @@ def p_pdf_brute_end(p):
 
 # Build the parsers
 parsers = {}              
-for tag in ['pdf','object', 'indirect', 'pdf_brute_end']:
+starts = ['pdf','object', 'indirect', 'pdf_brute_end' ]
+
+def generate_parsers():
+    for tag in starts:
+        logger.info("Building parsing table for tag %s"%tag)
+        start = tag
+        yacc.yacc(start=tag,tabmodule = 'parsetab_%s'%tag, outputdir = 'opaflib')
+
+for tag in starts:
     logger.info("Building parsing table for tag %s"%tag)
     start = tag
-    parsers[tag] = yacc.yacc(start=tag, errorlog=yacc.NullLogger())
+    parsers[tag] = yacc.yacc(start=tag,tabmodule = 'opaflib.parsetab_%s'%tag, write_tables=0)
 
 #entry function to parse a whole pdf or portion of it..
 def parse(tag,stream):
-    logger.debug("Parsing a %s"%tag)
-    return parsers[tag].parse(stream,tracking=True)
+    logger.debug("Parsing a <%s>"%tag)
+    return parsers[tag].parse(stream,tracking=True,lexer=get_lexer())
 
 def normalParser(pdf):
     '''

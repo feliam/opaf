@@ -38,5 +38,5 @@ PDF projection.""",
       packages=['opaflib','tests'],
       scripts=['opaf.py'],
       install_requires=['ply', 'lzw', 'lxml'],
-      test_suite = "tests"
+      test_suite = "tests",
       )
