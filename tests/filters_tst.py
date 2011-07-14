@@ -22,12 +22,12 @@ class FiltersTest(unittest.TestCase):
             self.assertEqual(clear, flt.decode(flt.encode(clear)))
 
         #Test strings that should not decode
-        #for coded in decode_exception:
-        #  self.assertRaises(Exception, flt.decode, coded)
+        for coded in decode_exception:
+            self.assertRaises(Exception, flt.decode, coded)
 
         #Test strings that should not encode
-        #for clear in encode_exception:
-        #  self.assertRaises(Exception, flt.encode, clear)
+        for clear in encode_exception:
+            self.assertRaises(Exception, flt.encode, clear)
 
 
     def testASCIIHexDecode(self):
@@ -36,7 +36,7 @@ class FiltersTest(unittest.TestCase):
           ('61 62 2e6364   657', 'ab.cdep'),
           ('7', 'p')
           ]
-        decode_exception = ['61 62 2e6364   657>']
+        decode_exception = ['61 62 2e6364 R  657', '$1' , '<><><><><><><' ]
         flt = filters.ASCIIHexDecode()
         self._basicTest(flt,decode_tbl,decode_exception=decode_exception,random_strings=self.random_strings)
 
@@ -65,8 +65,6 @@ class FiltersTest(unittest.TestCase):
         flt = filters.RunLengthDecode()
         self._basicTest(flt,decode_tbl,random_strings=self.random_strings)
 
-if __name__ == '__main__':
-    unittest.main()
 
         
 

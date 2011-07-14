@@ -624,4 +624,148 @@ def get_numgen(xml_element):
 def isEncrypted(xml_pdf):
     ''' Check if parse pdf has an Encryption dictionary '''
     return len(getMainXref(xml_pdf).xpath('./dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Encrypt"]')) == 1
+    
+    
+def decrypt(xml_pdf):
+    import hashlib, struct
+    from Crypto.Cipher import AES 
+    from Crypto.Util import randpool 
+    import base64 
+
+    def rc4crypt(data, key):
+        x = 0
+        box = range(256)
+        for i in range(256):
+            x = (x + box[i] + ord(key[i % len(key)])) % 256
+            box[i], box[x] = box[x], box[i]
+        x = 0
+        y = 0
+        out = []
+        for char in data:
+            x = (x + 1) % 256
+            y = (y + box[x]) % 256
+            box[x], box[y] = box[y], box[x]
+            out.append(chr(ord(char) ^ box[(box[x] + box[y]) % 256]))
+        
+        return ''.join(out)
+
+    block_size = 16 
+    key_size = 32 
+
+    def encrypt(plain_text,key_bytes):
+        assert len(key_bytes) == key_size
+        mode = AES.MODE_CBC 
+
+        pad = block_size - len(plain_text) % block_size 
+        data = plain_text + pad * chr(pad) 
+        iv_bytes = randpool.RandomPool(512).get_bytes(block_size) 
+        encrypted_bytes = iv_bytes + AES.new(key_bytes, mode, iv_bytes).encrypt(data) 
+        return encrypted_bytes
+
+    def decrypt(encrypted_bytes,key_bytes):
+        #assert len(key_bytes) == key_size
+        mode = AES.MODE_CBC 
+        iv_bytes = encrypted_bytes[:block_size] 
+        plain_text = AES.new(key_bytes, mode, iv_bytes).decrypt(encrypted_bytes[block_size:]) 
+        pad = ord(plain_text[-1]) 
+        return plain_text[:-pad] 
+        
+    encrypt_ref = getMainXref(xml_pdf).xpath('./dictionary/dictionary_entry/name[position()=1 and dec(@payload)="Encrypt"]/../R[position()=1]')[0]
+
+    #Get and print the encryption dictionary
+    encrypt = getIndirectObject(xml_pdf, payload(encrypt_ref))
+    encrypt_py = xmlToPy(encrypt.xpath('./dictionary')[0])
+
+    print "It's ENCRYPTED!"
+    print encrypt_py
+
+    #Ok try to decrypt it ...
+    assert encrypt_py['V'] == 4  
+    assert encrypt_py['R'] == 4
+
+    #password length
+    n = encrypt_py['Length']/8
+    print "N:",n
+
+    #a) Pad or truncate the password string to exactly 32 bytes. 
+    user_password = ""
+    pad = "28BF4E5E4E758A4164004E56FFFA01082E2E00B6D0683E802F0CA9FE6453697A".decode('hex')
+
+    print "PASSWORD: ", user_password.encode('hex')
+    print "PAD: ", pad.encode('hex')
+
+    #b) Initialize the MD5 hash function and pass the result of step (a) as input to this function.
+    m = hashlib.md5()
+    m.update((user_password+pad)[:32])
+    print "MD5 update 1", ((user_password+pad)[:32]).encode('hex')
+
+    #c) Pass the value of the encryption dictionary's O entry to the MD5 hash function.
+    m.update (encrypt_py['O'][:32])
+    print "MD5 update 2", (encrypt_py['O'][:32]).encode('hex')
+
+    #d) Convert the integer value of the P entry to a 32-bit unsigned binary number and pass these bytes to the
+    #  MD5 hash function, low-order byte first.  WTF!!??
+    print "MD5 update 3", struct.pack("<L", 0xffffffff&encrypt_py['P']).encode('hex')
+    m.update (struct.pack("<L",  0xffffffff&encrypt_py['P']   ))
+
+    #e) append ID ?
+    #TODO, get the ID from the trailer..
+    ID = ''
+    m.update (ID)
+    print "MD5 update 4", ID.encode('hex')
+
+    #f) If document metadata is not being encrypted, pass 4 bytes with the value 0xFFFFFFFF to the MD5 hash function.
+    if encrypt_py.has_key('EncryptMetadata') and encrypt_py['EncryptMetadata'] == false:
+        m.update('\xff'*4)
+        print "MD5 update 5", ('\xff'*4).encode('hex')
+
+    print "1rst DIGEST:", m.digest().encode('hex')
+    h = m.digest()[:n]
+
+    for i in range(0,50):
+        h = hashlib.md5(h[:n]).digest()
+        print "Encryption KEY(%d)"%i, h.encode('hex')
+        
+    key = h[:n]
+    print "Encryption KEY", key.encode('hex')
+
+    print "Try to authenticate"
+
+    _buf = hashlib.md5(pad + ID).digest()
+    print "MD5(padding+ID):",_buf.encode('hex')
+
+    for i in range(0,20):
+        _key = ''.join([chr(ord(k)^i) for k in list(key)])
+        _buf1 = rc4crypt(_buf,_key)
+        print "RC4 iter(%d) Encrypt data <%s> with key <%s> and it gives data <%s>"%(i,_buf.encode('hex'),_key.encode('hex'),_buf1.encode('hex'))
+        _buf = _buf1
+
+
+    assert _buf == encrypt_py['U'][:16]
+    print "Authenticated! (An actual pass is not needed. Using null pass '' )"
+    print "U", encrypt_py['U'].encode('hex')
+    print "O", encrypt_py['O'].encode('hex')
+
+    def decrypt_xml(xml_element):
+        n,g = get_numgen(xml_element)
+        m = hashlib.md5()
+        m.update(key)
+        m.update(chr(n&0xff))
+        m.update(chr((n>>8)&0xff))
+        m.update(chr((n>>16)&0xff))
+        m.update(chr(g&0xff))
+        m.update(chr((g>>8)&0xff))
+        m.update("sAlT")
+        real_key = m.digest()
+        pld = payload(e)
+        if pld.endswith("\x0d\x0a"):
+            pld = pld[:-2]
+        pld = decrypt(pld,real_key)
+        setpayload(xml_element,pld)
+
+    #decrypt every string and stream in place...
+    for e in xml_pdf.xpath('//stream_data'):
+        decrypt_xml(e)
+    for e in xml_pdf.xpath('//string'):
+        decrypt_xml(e)
 

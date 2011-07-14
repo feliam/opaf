@@ -7,7 +7,7 @@ use_setuptools()
 from setuptools import setup
 
 setup(name='OPAF',
-      version='0.9.2',
+      version='0.9.2-devel01',
       description='Open PDF Analysis Framework',
       long_description="""
 PDF files rely on a complex file structure constructed from a set tokens and 

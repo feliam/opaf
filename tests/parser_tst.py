@@ -12,9 +12,14 @@ class ParserTest(unittest.TestCase):
         object_tags_tbl = [
           ('array', '[ 1 (string) <414141> null ]'),
           ('number', '1'),
+          ('number', '1.0'),
+          ('number', '-1.0'),
           ('string', '(string)'),
+          ('string', '(st(ri)ng)'),
+          ('string', '(st(ri)n\\023g)'),
           ('string', '<41414141>'),
           ('dictionary', '<< /entry1 1 /entry2 (string) /entry3 <414141> /entry4 null >>'),
+          ('dictionary', '<< /entry1 1 /entry2#01 (string) /en#45try3 <414141> /entry4 null >>'),
           ]
 
         object_raises = [
@@ -25,7 +30,8 @@ class ParserTest(unittest.TestCase):
           '<asd>',
           '((asda)',
           'obj'
-          'qfdgfsda'
+          'qfdgfsda',
+          '<< /aa >>'
           ]
 
 
@@ -37,6 +43,8 @@ class ParserTest(unittest.TestCase):
 
         indirect_object_raises = [
           '1 0 obj\n<</key 1>>\nendobj\n2 0 obj\n<</key 2\nendobj',
+          '1 0 \nobj\n<</key 1>>\nendobj\n',
+          
           ]
 
         #test invalid objects

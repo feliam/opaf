@@ -411,20 +411,6 @@ if __name__ == '__main__':
         #psyco.full()
     except:
         pass
-
-    if True:
-        print "Test parse isolated objects"        
-
-        print parse('object', "[ 1 (string) <414141> null ]").tag
-        print parse('object', "1")
-        print parse('object', "(string)")
-        print parse('object', "<41414141>")
-        print parse('object', "<< /entry1 1 /entry2 (string) /entry3 <414141> /entry4 null >>")
-        print parse('indirect', "1 0 obj\n1\nendobj")
-        print parse('indirect', "1 0 obj\n(string)\nendobj")
-        print parse('indirect', "1 0 obj\n<41414141>\nendobj")
-        print parse('indirect', "1 0 obj\n[1 (string) <414141> null]\nendobj")
-        print parse('indirect', "1 0 obj\n<</key 1>>\nendobj\n2 0 obj\n<</key 2\nendobj") #TODO: test/fix It should return error(Its not just 1 object)
         
     bytes = 0
     files = 0

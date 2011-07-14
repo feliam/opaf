@@ -370,29 +370,31 @@ t_ignore = white_spaces
 def get_lexer():
     return lex.lex(debug=False,errorlog=lex.NullLogger())
 
+# lexify a file
+def lexify(stream):
+    ''' This translate a plain string into a sequence of tokens '''
+    # Give the lexer some input
+    my_lex = get_lexer()
+    my_lex.input(stream)
+
+    # Tokenize
+    toks = []
+    while True:
+        tok = my_lex.token()
+        if not tok: break        # No more input                
+        toks.append(tok)
+    return toks
+
 if __name__ == '__main__':
     try:
         import psyco
         psyco.full()
     except:
         pass
-        
-    bytes = 0
-    files = 0
+
     for filename in sys.argv[1:]:
         try:
-            s = file(filename,"r").read()
-            files += 1
-            bytes += len(s)
-            # Give the lexer some input
-            lex.input(s)
-            print filename
-            # Tokenize
-            while True:
-                tok = lex.token()
-                if not tok: break      # No more input                
-                print tok
+            print filename, lexify(file(filename,"r").read())
         except Exception,e:
-            print e, filename
-            print dir(e)
+            print "Exception!",e, filename
 

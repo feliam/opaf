@@ -3,8 +3,8 @@ from StringIO import StringIO
 import logging
 logger = logging.getLogger("FILTER")
 
-#This was robbed/ ported from gohstcrip C code/ coded insanely fast.
-#TODO: document and test A LOT, add at least 1 test per filter/perams convination
+#Part of this was robbed/ported from ghostcrip C code/ coded insanely fast.
+#TODO: document and test A LOT, add at least 1 test per filter/parms combination
 #TODO: check filter parameters consistency in every case
 #TODO: test Predictor
 
@@ -46,13 +46,6 @@ class ASCIIHexDecode(PDFFilter):
        Any other characters shall cause an error. If the filter encounters the EOD 
        marker after reading an odd number of hexadecimal digits, it shall behave as
        if a 0 (zero) followed the last digit.
-    >>> ahd = ASCIIHexDecode()
-    >>> ahd.decode("61 62 2e6364   65")
-    'ab.cde'
-    >>> ahd.decode('61 62 2e6364   657>')
-    'ab.cdep'
-    >>> ahd.decode('7>')
-    'p'
     '''
     default = None
     def __init__(self,params={}):
@@ -89,13 +82,8 @@ class ASCII85Decode(PDFFilter):
     cause an error. The ASCII base-85 encoding uses the characters ! through u and the 
     character z, with the 2-character sequence ~> as its EOD marker.
 
-    >>> a85 = ASCII85Decode()
-    >>> a85.decode('9jqo^BlbD-BleB1DJ+*+F(f,q')
-    'Man is distinguished'
-    >>> a85.decode('E,9)oF*2M7/c~>')
-    'pleasure.'
     '''
-    #This class is taken from ...
+    # Original class is taken from ...
     # base85.py: pure python base85 codec
     #
     # Copyright (C) 2008 Brendan Cully <brendan@kublai.com>
@@ -202,11 +190,14 @@ class Predictor():
     '''
     def __init__(self,n=1,columns=1,bits=8):
         assert n in [1,2,10,11,12,13,14,15]
-        self.predictor = n
+        self.predictor=n
         self.columns=columns
         self.bits=bits
 
-    def encode(self):
+    def encode(self,data):
+        if self.predictor == 1:
+            return data
+        #TODO: FIX
         raise "Unsupported Predictor encoder"
 
     def decode(self, data):
@@ -276,7 +267,6 @@ class Predictor():
         # PNG prediction can vary from row to row
         prev_rowdata = (0,) * rowlength
         for row in xrange(0,len(data) / rowlength):
-#            print (row*rowlength),((row+1)*rowlength),len(data) / rowlength
             rowdata = decode_row([ord(x) for x in data[(row*rowlength):((row+1)*rowlength)]],prev_rowdata)
             if self.predictor in [1,2]:
                 output.write(''.join([chr(x) for x in rowdata[0:]]))
@@ -304,7 +294,7 @@ class FlateDecode(PDFFilter):
     def decode(self, data):
         p = self.getParams()
         data = data.decode('zlib')
-        #TODO: wich convination of predictor/columns/bpc are valid???
+        #TODO: wich combination of predictor/columns/bpc are valid???
         predictor = int(p.get('Predictor',1))
         columns = int(p.get('Columns',0))
         bpc = int(p.get('BitsPerComponent',8))
@@ -361,9 +351,6 @@ class RunLengthDecode(PDFFilter):
        during decompression. If length is in the range 129 to 255, the following single byte shall
        be copied 257 - length (2 to 128) times during decompression. A length value of 128 shall 
        denote EOD.
-    >>> rl = RunLengthDecode()
-    >>> rl.decode('\x05123456\xfa7\x04abcde\x80junk')
-    '1234567777777abcde'
     '''
 
     def __init__(self,params={}):
@@ -394,7 +381,6 @@ class RunLengthDecode(PDFFilter):
 
 
 
-
 ### filter multiplexers....
 def defilterData(filtername,stream,params={}):
     logger.debug("Filtering stream with %s"%repr((filtername,params)))
@@ -415,9 +401,4 @@ def filterData(filtername,stream,params=None):
     elif filtername == "ASCIIHexDecode":
         return ASCIIHexDecode(params).encode(stream)
     
-if __name__ == "__main__":
-    a = ASCII85Decode()
-    print a.decode('E,9)oF*2M7/c~>'),repr(a.decode("pleasure."))
-    print defilterData("FlateDecode",'x\x9c\xabN)-P0P\xc8-\xcdQH\xadH\xceP\xc0\xcf5\x043k\x01\xdf\x15\x11\x85\n')
-    import doctest
-    doctest.testmod()
+
