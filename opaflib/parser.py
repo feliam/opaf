@@ -6,7 +6,7 @@ import sys,re
 import traceback
 
 import ply.yacc as yacc
-from opaflib.lexer import tokens, LexerException, get_lexer # Get the token map from the lexer.  This is required.
+from opaflib.lexer import PDFLexer, get_lexer # Get the token map from the lexer.  This is required.
 from opaflib.xmlast import create_node, payload, setpayload, expand_span, etree
 
 #logging facility
@@ -15,6 +15,7 @@ import logging
 logger = logging.getLogger("PARSER")
 
 
+tokens = PDFLexer.tokens
 #In PDF 1.5 and later, cross-reference streams may be used in 
 #linearized files in place of traditional cross-reference tables.
 #The logic described in this section, along with the appropriate 

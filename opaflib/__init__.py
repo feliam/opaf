@@ -100,6 +100,12 @@ def getStartxref(xml_pdf):
     assert len(startxref)>0, 'PDF file should have at least one startxref marker'
     return int(payload(startxref[-1]))
 
+def getObjectAt(xml_pdf, pos):
+    '''
+        Get the object found at certain byte position 
+    '''
+    return xml_pdf.xpath('//*[@lexstart="%s"]'%pos)
+
 def getMainXref(xml_pdf,startxref=None):
     '''
         Get the Trailer dictionary (should be at least one)
