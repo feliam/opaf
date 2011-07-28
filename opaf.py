@@ -33,10 +33,10 @@ It's in an early stage but more or less it should do something like this...
       * CCITTFax                                  `[procastinated]`
                  
   # Analyze dissected PDF
-  # Apply XPATH-like filter rules
-      * XML in place
-      * Tranformations over the XML
-      * Need to generalize it XPATH function decorator  
+      * XML Abstract Syntax tree in XML           `[working]` 
+      * lxml python classes handling different    
+        aspects of the AST                        `[working]`
+      * PDF Version 4 decryption                  `[working]` 
         
 
 '''
@@ -55,10 +55,10 @@ if __name__ == '__main__':
     parser.add_option("-x", "--xmlfile", dest="output_xml",
                       help="Generate an xml file.", metavar="XML")
 
-    parser.add_option("-l", "--logfile", dest="log_file", default='opaf.log',
+    parser.add_option("-l", "--logfile", dest="log_file", default='/dev/stdout',
                       help="Dump log messages to LOG file.", metavar="LOG")
 
-    parser.add_option("-i", "--interactive", action="store_false", dest="shell", default=False,
+    parser.add_option("-i", "--interactive", action="store_true", dest="shell", default=False,
                       help="Throw interactive python shell")
 
     parser.add_option("-g", "--graph", dest="graph", default=None,
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     logging.basicConfig(filename=options.log_file,level=logging.DEBUG)
     logger = logging.getLogger("OPAF")
     logger.debug("Starting OPAF")
-
+    print options
     try:
         #load the especified pdf
         if len(args)>0 :
@@ -94,10 +94,6 @@ if __name__ == '__main__':
         else:
             assert options.shell == False, "Interactive not compatible with stdin feed"
             pdf = sys.stdin.read()            
-
-        #Interact if asked
-        if options.shell:
-            raise "Uninmplemented"
 
         if pdf:
             #parse
@@ -118,7 +114,7 @@ if __name__ == '__main__':
                               'Range', 'Font', 'FunctionType', 'Contents', 'Size', 'ExtGState' ])
 
 
-        if options.output_xml!=None and xml_pdf:
+        if options.output_xml is not None and xml_pdf is not None:
             logger.info("Writing XML in %s"%options.output_xml)            
             file(options.output_xml,'w').write(getXML(xml_pdf))
 
@@ -138,6 +134,14 @@ if __name__ == '__main__':
             for ty in [payload(x) for x in xml_pdf.xpath('//indirect_object_stream/dictionary/dictionary_entry/name[@payload=enc("Filter")]/../*[position()=2]')]:
                 filters[ty] = filters.get(ty,0)+1
             logger.info("Object Filter frequencies: %s"%repr(filters))
+
+
+        #Interact if asked
+        if options.shell:
+            import code
+            code.interact("Wellcome to OPAFLib\n The variable *xml* has your pdf. Try dir(xml_pdf).",local=locals())
+            print "Bye"
+
 
         #Regenerates PDF (it ignores actual XREF)
         if options.output_pdf!=None and xml_pdf:

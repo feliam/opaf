@@ -6,14 +6,16 @@ import sys,re
 import traceback
 
 import ply.yacc as yacc
-from opaflib.lexer import PDFLexer, get_lexer # Get the token map from the lexer.  This is required.
-from opaflib.xmlast import create_node, payload, setpayload, expand_span, etree
+from opaflib.lexer import PDFLexer 
+from opaflib.xmlast import create_leaf, create_tree
+
 
 #logging facility
 import logging
-#logging.basicConfig(filename='opaf.log',level=logging.DEBUG)
 logger = logging.getLogger("PARSER")
 
+# This is required by PLY
+tokens = PDFLexer.tokens
 
 tokens = PDFLexer.tokens
 #In PDF 1.5 and later, cross-reference streams may be used in 
@@ -22,8 +24,8 @@ tokens = PDFLexer.tokens
 #syntactic changes for cross-reference streams shall still apply.
 def p_pdf(p):
     ''' pdf : HEADER pdf_update_list'''
-    header = create_node('header',p.lexspan(1), p[1])
-    p[0] = create_node('pdf', p.lexspan(0), "OPAF!", [header] + p[2])
+    header = create_leaf('header', p[1], span=p.lexspan(1))
+    p[0] = create_tree('pdf', [header] + p[2], span=p.lexspan(0), version="OPAF!" )
 
 #7.3.6    Array Objects
 #An array object is a one-dimensional collection of objects arranged
@@ -34,7 +36,7 @@ def p_pdf(p):
 
 def p_array(p):
     ''' array : LEFT_SQUARE_BRACKET object_list RIGHT_SQUARE_BRACKET '''
-    p[0] = create_node('array',p.lexspan(0), None, p[2])
+    p[0] = create_tree('array', p[2], span=p.lexspan(0))
 
 def p_object_list(p):
     ''' object_list : object object_list '''
@@ -47,35 +49,37 @@ def p_object_list_empty(p):
 #Objects
 def p_object_name(p):
     ''' object : NAME '''
-    p[0] = create_node('name',p.lexspan(1),p[1])                    
+    p[0] = create_leaf('name', p[1], span=p.lexspan(1))
 
 def p_object_string(p):
     ''' object : STRING '''                    
-    p[0] = create_node('string',p.lexspan(1),p[1])
-
+    p[0] = create_leaf('string', p[1], span=p.lexspan(1))
+    
 def p_object_hexstring(p):
     ''' object : HEXSTRING '''                    
-    p[0] = create_node('string',p.lexspan(1),p[1])
+    p[0] = create_leaf('string', p[1], span=p.lexspan(1))
     
 def p_object_number(p):
     ''' object : NUMBER '''
-    p[0] = create_node('number',p.lexspan(1),p[1])
-
+    x = p[1]
+    x = float(int(float(x))) == float(x) and int(float(x)) or float(x)
+    p[0] = create_leaf('number', x, span=p.lexspan(1))
+    
 def p_object_true(p):
     ''' object : TRUE '''                    
-    p[0] = create_node('bool',p.lexspan(1),True)
+    p[0] = create_leaf('bool', True, span=p.lexspan(1))
 
 def p_object_false(p):
     ''' object : FALSE '''                    
-    p[0] = create_node('bool',p.lexspan(1),False)
+    p[0] = create_leaf('bool', False, span=p.lexspan(1))
 
 def p_object_null(p):
     ''' object : NULL '''                    
-    p[0] = create_node('null',p.lexspan(1),'null')
+    p[0] = create_leaf('null', None, span=p.lexspan(1))
     
 def p_object_ref(p):
-    ''' object : R '''                    
-    p[0] = create_node('R',p.lexspan(1),p[1])
+    ''' object : R '''
+    p[0] = create_leaf('R', p[1], span=p.lexspan(1))
 
 #complex objexts
 def p_object_dictionary(p):
@@ -94,7 +98,7 @@ def p_object_array(p):
 #may have zero entries.
 def p_dictionary(p):
     ''' dictionary : DOUBLE_LESS_THAN_SIGN dictionary_entry_list DOUBLE_GREATER_THAN_SIGN '''
-    p[0] = create_node('dictionary',p.lexspan(0), None, p[2])
+    p[0] = create_tree('dictionary', p[2], span=(p.lexspan(1)[0], p.lexspan(3)[1]))
     
 def p_dictionary_entry_list(p):
     ''' dictionary_entry_list : dictionary_entry_list NAME object
@@ -102,10 +106,11 @@ def p_dictionary_entry_list(p):
     if len(p) == 1:
         p[0]=[]
     else:
-        name_node = create_node('name',p.lexspan(2),p[2])
-        dictionary_span = (p.lexspan(1)[0],p.lexspan(2)[1])
-        dictionary_node = create_node('dictionary_entry', dictionary_span, None, [name_node,p[3]])
+        key_node = create_leaf('name', p[2], span=p.lexspan(2))
+        dictionary_span = (p.lexspan(2)[0],p.lexspan(3)[1])
+        dictionary_node = create_tree('entry', [key_node,p[3]], span=dictionary_span)
         p[0] = p[1] + [dictionary_node]
+
 
 #7.3.10 Indirect Objects
 #The definition of an indirect object in a PDF file shall consist of its 
@@ -123,13 +128,14 @@ def p_indirect(p):
 
 def p_indirect_object(p):
     ''' indirect_object : OBJ object ENDOBJ '''
-    p[0] = create_node('indirect_object', p.lexspan(0), p[1], [p[2]])
+    ref = "%d %d"%p[1]
+    p[0] = create_tree('indirect_object', [p[2]], span=p.lexspan(0), id=ref)
     
 def p_indirect_object_stream(p):
     ''' indirect_object_stream : OBJ dictionary STREAM_DATA ENDOBJ '''
-    span = (p.lexspan(3)[0],p.lexspan(4)[0])
-    stream = create_node('stream_data',span,p[3],[])
-    p[0] =  create_node('indirect_object_stream',p.lexspan(0), p[1] , [p[2], stream])
+    stream_data = create_leaf('data',p[3],span=(p.lexspan(2)[0],p.lexspan(4)[1]))
+    stream = create_tree('stream',[p[2], stream_data],span=p.lexspan(0))
+    p[0] =  create_tree('indirect_object', [stream],span=p.lexspan(0), id="%d %d"%p[1])
 
 #pdf
 #7.5    File Structure
@@ -144,7 +150,8 @@ def p_indirect_object_stream(p):
 #     certain special objects within the body of the file
 def p_xref_common(p):
     ''' xref : XREF TRAILER dictionary '''
-    p[0] = create_node('xref',p.lexspan(0), p[1], [p[3]])
+    data = create_leaf('data', str(p[1]), span=p.lexspan(0))
+    p[0] = create_tree('xref',[p[3], data], span=p.lexspan(0))
 
 # 7.5.8.1:: Therefore, with the exception of the startxref address %%EOF
 # segment and comments, a file may be entirely a sequence of objects.
@@ -155,43 +162,32 @@ def p_xref_stream(p):
 #PDF_UPDATE_LIST
 def p_pdf_update(p):
     ''' pdf_update : body xref pdf_end '''
-    start = 0 
-    if len(p[1])>0:
-        start = int(p[1][0].get('lexstart'))
-    else:
-        start = int(p[2].get('lexstart'))
-    end = int(p[3].get('lexend'))
-    p[0] = create_node('pdf_update', (start,end),None,p[1]+[p[2],p[3]])
+    p[0] = create_tree('pdf_update', p[1]+[p[2],p[3]],span=(0xffffffff,-1))
+    [p[0].span_expand(e.span) for e in p[1]+[p[2],p[3]]]
 
 #PDF_UPDATE_LIST
 def p_pdf_end(p):
     ''' pdf_end : STARTXREF EOF'''
-    p[0] = create_node('pdf_end', p.lexspan(0), p[1],[])
+    p[0] = create_leaf('startxref', p[1], span=p.lexspan(0))
 
 def p_pdf_update_list(p):    
     ''' pdf_update_list : pdf_update_list pdf_update '''
-    p[1].append(p[2])
-    #expand(p[1],p.lexspan(0))
-    p[0] = p[1]
+    p[0] = p[1] + [p[2]]
 
 def p_pdf_update_list_one(p):    
     ''' pdf_update_list : pdf_update '''
     p[0] = [p[1]]
-    #create_node('pdf_update_list', p.lexspan(0), None, [p[1]])
     
 def p_body_object(p):
     ''' body : body indirect_object 
              | body indirect_object_stream '''
-    p[1].append(p[2])
-#   expand(p[1],p.lexspan(0))
-    p[0] = p[1]
+    p[0] = p[1]+[p[2]]
     
 def p_body_void(p):
     ''' body : '''
     p[0] = []
 
 def p_error(p):
-    print p
     if not p:
         logger.error("EOF reached!")
     else:
@@ -200,8 +196,8 @@ def p_error(p):
 #Used in BRUTE parsing
 def p_pdf_brute_end(p):
     ''' pdf_brute_end : XREF TRAILER  dictionary STARTXREF EOF'''
-    xref = create_node('xref',(0,p.lexspan(4)[0]-1), p[1], [p[3]])
-    pdf_end = create_node('pdf_end', (p.lexspan(4)[0],p.lexspan(0)[1]), p[4],[])
+    xref = create_tree('xref', [p[3]],span=(0,p.lexspan(4)[0]-1), xref=p[1])
+    pdf_end = create_leaf('startxref', p[4], span=(p.lexspan(4)[0],p.lexspan(0)[1]))
     p[0] = [xref, pdf_end] 
 
 
@@ -210,20 +206,29 @@ parsers = {}
 starts = ['pdf','object', 'indirect', 'pdf_brute_end' ]
 
 def generate_parsers():
+    ''' 
+        Generate the PLY parsers.
+        This should be called from the setup
+    '''
     for tag in starts:
         logger.info("Building parsing table for tag %s"%tag)
         start = tag
-        yacc.yacc(start=tag,tabmodule = 'parsetab_%s'%tag, outputdir = 'opaflib')
+        yacc.yacc(start=tag, tabmodule='parsetab_%s'%tag, outputdir='opaflib')
 
+#Load the parsers
 for tag in starts:
     logger.info("Building parsing table for tag %s"%tag)
     start = tag
-    parsers[tag] = yacc.yacc(start=tag,tabmodule = 'opaflib.parsetab_%s'%tag, write_tables=0)
+    parsers[tag] = yacc.yacc(start=tag, tabmodule='opaflib.parsetab_%s'%tag, write_tables=0)
 
-#entry function to parse a whole pdf or portion of it..
+
 def parse(tag,stream):
-    logger.debug("Parsing a <%s>"%tag)
-    return parsers[tag].parse(stream,tracking=True,lexer=get_lexer())
+    '''
+       Entry function to parse a whole pdf or portion of it..
+    '''
+    logger.debug("Parsing an object of type <%s>"%tag)
+    lexer = PDFLexer().build(debug=False,errorlog=logger)
+    return parsers[tag].parse(stream,tracking=True,lexer=lexer)
 
 def normalParser(pdf):
     '''
@@ -233,15 +238,7 @@ def normalParser(pdf):
         Assuming endstreams are no appearing inside streams 
         we can apply an eager parser and do not Need the xref
     '''
-    ret = None
-    try:
-        xml_element = parse('pdf',pdf)
-        ret = xml_element!=None and etree.ElementTree(xml_element) or None
-    except Exception,e:
-        logger.error("Error in Normal parsing... %s"%e)
-    return ret
-
-
+    return parse('pdf',pdf)
 
 def bruteParser(pdf):
     '''
@@ -258,7 +255,7 @@ def bruteParser(pdf):
             start = header.start()
             end = header.end()
             version = header.group(0)[-3:]
-            xml_headers.append(create_node('header', (start,end), version))
+            xml_headers.append(create_leaf('header', version,span=(start,end)))
         logger.info('Found %d headers'%len(xml_headers))
         
         #Search the startxref. And xrefs.
@@ -274,16 +271,14 @@ def bruteParser(pdf):
                 try:
                     xml_xref, xml_pdf_end = parse('pdf_brute_end', potential_xref)
                     #fix lexspan and append
-                    xml_xref.set('lexstart', str(int(xml_xref.get('lexstart'))+start))
-                    xml_xref.set('lexend', str(int(xml_xref.get('lexend'))+start))
+                    xml_xref.span_move(start)
                     xml_xrefs.append(xml_xref)
-
                     #fix lexspan and append
-                    xml_pdf_end.set('lexstart', str(int(xml_pdf_end.get('lexstart'))+start))
-                    xml_pdf_end.set('lexend', str(int(xml_pdf_end.get('lexend'))+start))
+                    xml_pdf_end.span_move(start)
                     xml_pdf_ends.append(xml_pdf_end)
-                except Exception:
-                    logger.info("Couldn't parse a xref, trailer and %%%%EOF at [%s:%s]"%(start,end))
+                except Exception, e:
+                    print e
+                    logger.info("Couldn't parse a xref, trailer and %%%%EOF at [%s:%s] (%s)"%(start,end,e))
 
         #use the force
         #This algorithm will try to match any obj with any endobj and will keep it 
@@ -301,67 +296,84 @@ def bruteParser(pdf):
             start = m.start()
             for end in [x.end() for x in endobjs if x.start()>m.end()]:
                 try:
-                    logger.debug("Parsing potential object at [%s:%s]"%(start,end))
+                    logger.debug("Parsing potential object at %s~%s"%(start,end))
                     potential_obj = pdf[start:end]
+                    
+                    '''
+                    DISABLED
+                    # If for some reason there are "endstreams" keywords inside the 
+                    # stream let's momentaneaously escape them, so it can be parsed  
+                    # with the strict parser
                     escape_endstreams = [e.start()+start for e in endstreams if e.start()>start and e.end()<end ]
-
                     for e in escape_endstreams[:-1]:
                         potential_obj = potential_obj[:e] +"X"*9 + potential_obj[e+9:]
-
+                    '''
+                    
+                    #Try to strictly parse an indirect object
                     xml_iobject = parse('indirect',potential_obj)
-                    if xml_iobject == None:
-                        continue
+
                     #fix lexspan
-                    xml_iobject.set('lexstart', str(int(xml_iobject.get('lexstart'))+start))
-                    xml_iobject.set('lexend', str(int(xml_iobject.get('lexend'))+start))
+                    xml_iobject.span_move(start)
+
+                    '''
+                    DISABLED
                     #FIX: fix escape
                     #WRONG offset!!!!!!!!!!!!
                     pl = payload(xml_iobject)
+                    #Un-escape the "endstream" keywords
                     for e in escape_endstreams[:-1]:
                         pl = pl[:e] +"endstream" + pl[e+9:]
                     setpayload(xml_iobject, pl)
+                    '''
+
                     #append to the list
                     xml_iobjects.append(xml_iobject)
+
                     #Just parse the first object we can of this try.
+                    #Comment out the following line to search for phantoms 
+                    #(i.e. objects inside objects or overlaped objects)
                     break
                 except Exception,e:
-                    logger.error("Received exception %s"%e)
-                    logger.debug("Could not parse potential object at [%s:%s]."%(start,end))
+                    logger.debug("Received exception %s when parsing potential object at [%s:%s]."%(e, start,end))
         logger.info("Succesfully parsed %d/%d Objects ending points"%(len(xml_iobjects),len(endobjs)*len(objs)))
 
-        #summ all the objects
+        #sum all the objects
         allobjects = xml_headers + xml_xrefs + xml_pdf_ends + xml_iobjects
 
-        if len(xml_headers) == 0:
+        if len(xml_pdf_ends) == 0:
             logger.info("%%%%EOF tag was not found! Creating a dummy.")
-            allobjects.append(create_node('pdf_end', (len(pdf),len(pdf)), "-1"))
+            dummy_startxref = create_leaf('startxref', -1, span=(len(pdf),len(pdf)))
+            print dummy_startxref.value
+            allobjects.append(dummy_startxref)
 
         if len(xml_headers) == 0:
             logger.info("%%%%PDF-N-M tag was not found! Creating a dummy.")
-            allobjects.append(create_node('header', (0,len(pdf)), "NOVERSION",[] ))
+            allobjects.append(create_leaf('header', "NOVERSION", span=(0,0)))
 
         #Sort it as they appear in the file
-        allobjects = sorted(allobjects,lambda x,y: cmp(int(x.get('lexstart')), int(y.get('lexstart'))))
+        allobjects = sorted(allobjects,lambda x,y: cmp(x.span[0], y.span[0]))
 
         #recreate XML structure 'best' we can...
         assert allobjects[0].tag == 'header'
-        root_element = create_node('pdf', (0,len(pdf)), "OPAF!(raw)",[allobjects.pop(0)])
+        root_element = create_tree('pdf', [allobjects.pop(0)], span=(0,len(pdf)), version="OPAF!(raw)")
         
-        update = create_node('pdf_update',(0,0))
+        update = create_tree('pdf_update', [],span=(0xfffffff,-1))
         while len(allobjects)>0:
             thing = allobjects.pop(0)
             update.append(thing)
-            if thing.tag == 'pdf_end':
+            update.span_expand(thing.span)
+            if thing.tag == 'startxref':
                 root_element.append(update)
-                update = create_node('pdf_update',(0,0))
+                update = create_tree('pdf_update',[],span=(0xfffffff,-1))
+
         if len(update)>0:
             logger.info("Missing ending %%EOF")
             root_element.append(update)
 
-        return etree.ElementTree(root_element)
+        return root_element
     except Exception,e:
-        logger.error("Brute-Parsing a %s"%tag)    
-    return None
+        print e,e,e
+        raise e
 
 def xrefParser(pdf):
     '''
@@ -393,26 +405,23 @@ def multiParser(pdf):
         Try the different parsing strategies in some preference order...
     '''
     #fallback chain of different type of parsing algorithms
-    xml_pdf = None
-    if xml_pdf == None:
-        xml_pdf = normalParser(pdf)
-    if xml_pdf == None:
-        logger.info("PDF is NOT a sequence of objects as it SHALL be, for discussion see http://bit.ly/coRMtc")
-        xml_pdf = bruteParser(pdf)
-    if xml_pdf == None:
-        xml_pdf = xrefParser(pdf)
-    if xml_pdf == None:
-        logger.info("Couldn't parse it. Damn!")
-    return xml_pdf
-    
-if __name__ == '__main__':
     try:
-        pass
-        #import psyco
-        #psyco.full()
-    except:
-        pass
-        
+        return normalParser(pdf)
+    except Exception, e:
+        logger.info("PDF is NOT a sequence of objects as it SHALL be, for discussion see http://bit.ly/coRMtc ("+str(e)+")")
+    try:
+        return bruteParser(pdf)
+    except Exception, e:
+        logger.error("Can not parse it with a relaxed parser either ("+str(e)+")")
+    try:
+        return xrefParser(pdf)
+    except Exception, e:
+        logger.info("Couldn't parse it. Damn! ("+str(e) +")")
+    return None
+
+
+#Example main    
+if __name__ == '__main__':
     bytes = 0
     files = 0
     for filename in sys.argv[1:] :
@@ -421,12 +430,8 @@ if __name__ == '__main__':
             s = file(filename,"r").read()
             files += 1
             bytes += len(s)
-            try:
-                result = parse('pdf',s)
-            except:
-                result = bruteParse(s)
+            result = multiParser(s)
             print(etree.tostring(result, pretty_print=True))
-
         except Exception,e:
-            print "OH", e
+            print "Pucha!", e
 

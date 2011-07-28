@@ -34,7 +34,6 @@ class ParserTest(unittest.TestCase):
           '<< /aa >>'
           ]
 
-
         indirect_object_tags_tbl = [
           ('indirect_object', '1 0 obj\n(string)\nendobj  \n'),
           ('indirect_object', '1 0 obj\n<41414141>\nendobj\n'),

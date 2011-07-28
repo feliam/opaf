@@ -12,9 +12,9 @@ logger = logging.getLogger('LEXER')
 TOKEN = lex.TOKEN
 class PDFLexer():
     #Unique Lexer exception to comunicate error conditions to upper dimensions..
-    class LexerException(Exception):
+    class Exception(Exception):
         def __init__(self,t,txt):
-            super(LexerException,self).__init__()
+            super(PDFLexer.Exception,self).__init__()
             self.pos=t.lexer.lexpos
             self.data=t.lexer.lexdata[t.lexer.lexpos:10]
             self.txt = txt
@@ -92,6 +92,10 @@ class PDFLexer():
     @TOKEN(eol)
     def t_string_LITERAL_STRING_EOL(self, t):
         t.lexer.string += '\x0A'
+
+    #Nothing is ignored when lexing a string
+    t_string_ignore = ''
+
         
     @TOKEN(r'\\([nrtbf()\\]|[0-7]{1,3}|'+eol+')')    
     def t_string_ESCAPED_SEQUENCE(self, t):
@@ -127,7 +131,7 @@ class PDFLexer():
     #TODO: Log, increment a warning counter, or even dismiss the file   
     def t_string_error(self, t):
         logger.error('Error scanning a literal string at %d\n'%t.lexer.lexpos)
-        raise LexerException(self, t,'Scanning string')
+        raise PDFLexer.Exception(self, t,'Scanning string')
         t.type  = 'STRING'
         t.value = t.lexer.string
         t.lexer.skip(1)
@@ -204,7 +208,10 @@ class PDFLexer():
 
     def t_name_error(self, t):
         logger.error('Name error at pos: %d [%s]'%(t.lexer.lexpos, t.lexer.name))
-        raise LexerException(self, t,'Scanning a name')
+        raise PDFLexer.Exception(self, t,'Scanning a name')
+
+    #Nothing is ignored when lexing a name
+    t_name_ignore = ''
 
     #7.3.6 Array Objects
     #An array shall be written as a sequence of objects enclosed in [ and ].
@@ -279,6 +286,7 @@ class PDFLexer():
     #followed by a version number of the form 1.N, where N is a digit between 0 and 7.
     def t_HEADER(self, t):
         r'%PDF-1\.[0-7]'
+        t.endlexpos = t.lexer.lexmatch.span(0)[1]
         t.value = t.value[-3:]
         return t
         
@@ -317,8 +325,10 @@ class PDFLexer():
     #TODO: Log, increment a warning counter, or even dismiss the file   
     def t_xref_error(self, t):
         logger.error('Lexing XREF')
-        raise LexerException(t,'Scanning a normal XREF')
-        t.lexer.skip(1)
+        raise PDFLexer.Exception(t,'Scanning a normal XREF')
+
+    #Nothing is ignored when lexing an xref
+    t_xref_ignore = ''
 
 
     #7.5.5 File Trailer
@@ -358,13 +368,14 @@ class PDFLexer():
         if t.value.startswith('%%EOF'):
             t.type = 'EOF'
             return t
+        logger.debug("Ignoring comment <%s> at pos %d!!"%(t.value.encode('string_escape'), t.lexer.lexpos))
 
     #Damn! A lexing error!!
     #TODO: Log, increment a warning counter, or even dismiss the file   
     def t_error(self, t):
         c = t.lexer.lexdata[t.lexer.lexpos]
         logger.error('Error at pos %d. Skipping byte %02x[%s]'%(t.lexer.lexpos, ord(c), c.isalpha() and c or '?'))
-        raise LexerException(t,'Scanning limbo')
+        raise PDFLexer.Exception(t,'Scanning limbo')
 
     #ignore white spaces
     t_ignore = white_spaces
@@ -387,17 +398,7 @@ class PDFLexer():
              toks.append(tok)
         return toks
 
-# Build the lexer
-def get_lexer():        
-    return PDFLexer().build(debug=False,errorlog=lex.NullLogger())
-
-
 if __name__ == '__main__':
-#    try:
-#        import psyco
-#        psyco.full()
-#    except:
-#        pas
     pdf_lexer = PDFLexer()
     pdf_lexer.build()
     for filename in sys.argv[1:]:

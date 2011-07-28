@@ -1,5 +1,5 @@
 from opaflib.parser import parse,bruteParser,normalParser,xrefParser,multiParser
-from opaflib.xmlast import payload,setpayload,xmlToPy,etree,create_node
+from opaflib.xmlast import etree #payload,setpayload,xmlToPy,etree,create_node
 from opaflib.filters import defilterData
 from opaflib.xref import *
 #Logging facility
@@ -316,21 +316,8 @@ def getXML(xml_pdf):
     ''' 
         Returns a string containing the prettyprinted XML of the pdf.
     '''
-    from copy import deepcopy
     logger.info("Generating XML output")
-    output_xml = deepcopy(xml_pdf)
-    #HACK to make it more humanly readeable.
-    for e in output_xml.xpath('//*'):
-        try:
-            p = payload(e)
-            if p == "None":
-                del(e.attrib['payload'])
-            elif set(map(chr, range(0,10) + range(11,32) + range(127,160))).isdisjoint(p):
-                e.set('payload',p)
-        except Exception,ex:
-            logger.error("Exception generating the XML (%s)"%ex)
-
-    return etree.tostring(output_xml,  pretty_print=True)
+    return etree.tostring(xml_pdf,  pretty_print=True)
 
 
 def filterTypes(xml_pdf,
@@ -367,7 +354,7 @@ def filterDictionaryKeys(xml_pdf,permited=None):
         dkeys = set([])
         for ty in xml_pdf.xpath('//dictionary/dictionary_entry/name[position()=1]'):
             dkeys.add(payload(ty))
-        logger.info("Found this differen dictionary keys:%s"%dkeys)
+        logger.info("Found this different   dictionary keys:%s"%dkeys)
 
         for ty in list(xml_pdf.xpath('/*/dictionary/dictionary_entry/name[position()=1]')):
             if not payload(ty) in permited:
@@ -774,4 +761,84 @@ def decrypt(xml_pdf):
         decrypt_xml(e)
     for e in xml_pdf.xpath('//string'):
         decrypt_xml(e)
+
+#query
+
+#<pdf>
+
+
+
+def getStartXref(xml_pdf):
+    '''
+        Get last startxref mark. Should point to an xref object.
+    '''
+    return int(xml_pdf.pdf_update[-1].startxref.pyval)
+
+def getObjectAt(xml_pdf, pos):
+    '''
+        Get the object found at certain byte position 
+    '''
+    return xml_pdf.xpath('//*[starts-with(@span,"%d~")]'%pos)[0]
+
+def getTrailer(xml_pdf):
+    startxref = getStartXref(xml_pdf)
+    xref = getObjectAt(xml_pdf, startxref)
+    assert xref.tag == 'xref'
+    return xref.dictionary
+
+def isEncrypted(xml_pdf):
+    return getTrailer(xml_pdf).pyval.has_key('Encrypt')
+
+def isStreamFiltered(xml_pdf):
+    assert xml_pdf.tag=='stream'
+    return xml_pdf.dictionary.pyval.has_key('Filter')
+     
+    
+
+#tranform
+
+def expand(e):
+    '''
+        This will expand an indirect_object_stream and modify it in place
+        It may delete the Filter, DecodeParams, JBIG2Globals keywords of 
+        the dictionary
+    '''
+    dictionary_py = xmlToPy(e[0])
+    if not 'Filter' in dictionary_py.keys():
+        logger.info( 'A filteres/compressed stream shall have the Filter key. obj %s already expanded?',payload(e))
+        return True
+    filters = dictionary_py['Filter']
+    params = dictionary_py.get('DecodeParms',None)
+    assert any([type(filters) == list and (type(params) == list or params==None ),
+                type(filters) != list and (type(params) == dict or params==None ) ]), 'Filter/DecodeParms wrong type'
+
+    if type(filters) != list:
+        filters=[filters]
+        params=params and [params] or [{}]
+
+    if params == None:
+        params = [{}]*len(filters)
+        
+    assert all([type(x)==str for x in filters]), 'Filter shall be a names'
+    assert all([type(x)==dict for x in params]), 'Params shoulb be a dictionary.. or null?'
+    assert len(filters) == len(params),'Number of Decodeparams should match Filters'
+    if len(set(['DCTDecode','CCITTFaxDecode','JPXDecode','JBIG2Decode']).intersection(set(filters)))>0:
+        return False
+    #Expand/defilter data
+    data = payload(e[1])
+    try:
+        for filtername,param in zip(filters,params):
+            data = defilterData(filtername,data, param)
+        setpayload(e[1],data)   
+
+        #remove /Filter and /DecodeParms from stream dictionary
+        for rem in e[0].xpath('./dictionary_entry/*[position()=1 and @payload=enc("Filter") or @payload=enc("DecodeParms")]/..'):
+            e[0].remove(rem)
+
+        return True
+    except Exception,ex:
+        logger.error('Error defiltering data with %s(%s). Exception: %s. Saving error stream on %s.error'%(filtername, params, ex, filtername))
+        file('%s.error'%filtername,'w').write(data)
+    return False
+
 
